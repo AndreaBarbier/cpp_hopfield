@@ -1,0 +1,53 @@
+# --- Binari e Build ---
+# Cartella di output di CMake (solitamente creata dall'utente)
+build/
+bin/
+lib/
+
+# --- Artefatti di compilazione ---
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.exe
+*.out
+
+# --- CMake ---
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+Makefile
+# Escludi file specifici di IDE per CMake (es: CLion)
+cmake-build-debug/
+cmake-build-release/
+
+# --- Documentazione (LaTeX) ---
+# Esclude i file ausiliari generati dalla compilazione di main.tex
+docs/*.aux
+docs/*.log
+docs/*.toc
+docs/*.synctex.gz
+docs/*.pdf
+docs/*.out
+docs/*.fdb_latexmk
+docs/*.fls
+
+# --- Test ---
+# Se i test generano report o file temporanei
+tests/*.log
+
+# --- Sistema e IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.user
+
+# --- File temporanei di backup ---
+*~
+*.bak
