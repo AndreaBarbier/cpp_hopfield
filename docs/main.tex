@@ -1,0 +1,176 @@
+\documentclass[12pt, a4paper]{article}
+
+% --- Pacchetti essenziali ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+% --- Grafica e figure ---
+\usepackage{graphicx}
+\usepackage{float}
+
+% --- Matematica ---
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% --- Codice sorgente ---
+\usepackage{listings}
+\usepackage{xcolor}
+\lstset{
+    language=C++,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{red},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    frame=single,
+    captionpos=b
+}
+
+% --- Link e riferimenti ---
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=black,
+    urlcolor=blue
+}
+
+% --- Bibliografia ---
+\usepackage{biblatex}
+\addbibresource{bibliography.bib}
+
+% -------------------------------------------------------
+% FRONTESPIZIO
+% -------------------------------------------------------
+\title{
+    \vspace{2cm}
+    {\Large Università di Bologna} \\
+    \vspace{0.5cm}
+    {\large Corso di ...} \\
+    \vspace{2cm}
+    \rule{\linewidth}{0.5pt} \\
+    \vspace{0.5cm}
+    {\LARGE \textbf{Titolo della Relazione}} \\
+    \vspace{0.3cm}
+    {\large Sottotitolo (opzionale)} \\
+    \vspace{0.5cm}
+    \rule{\linewidth}{0.5pt}
+}
+\author{
+    Nome Cognome \\
+    \small Matricola: XXXXXX \\
+    \small \texttt{email@studenti.unibo.it}
+}
+\date{Anno Accademico 2025/2026}
+
+% -------------------------------------------------------
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+\newpage
+
+% --- Indice ---
+\tableofcontents
+\newpage
+
+% -------------------------------------------------------
+% ABSTRACT
+% -------------------------------------------------------
+\begin{abstract}
+Breve descrizione del progetto o dell'elaborato (5-10 righe). 
+Riassumi l'obiettivo, il metodo utilizzato e i risultati principali.
+\end{abstract}
+
+\newpage
+
+% -------------------------------------------------------
+% 1. INTRODUZIONE
+% -------------------------------------------------------
+\section{Introduzione}
+Descrivi il contesto del problema affrontato. Spiega:
+\begin{itemize}
+    \item Qual è il problema o l'obiettivo
+    \item Perché è rilevante
+    \item Come è strutturata la relazione
+\end{itemize}
+
+% -------------------------------------------------------
+% 2. BACKGROUND E TEORIA
+% -------------------------------------------------------
+\section{Background e Teoria}
+Esponi i concetti teorici necessari per comprendere il lavoro.
+Puoi inserire formule matematiche:
+\begin{equation}
+    E = mc^2
+\end{equation}
+
+% -------------------------------------------------------
+% 3. METODOLOGIA
+% -------------------------------------------------------
+\section{Metodologia}
+Descrivi come hai affrontato il problema:
+\begin{itemize}
+    \item Algoritmi o tecniche utilizzate
+    \item Strumenti e librerie usate
+    \item Scelte progettuali
+\end{itemize}
+
+% -------------------------------------------------------
+% 4. IMPLEMENTAZIONE
+% -------------------------------------------------------
+\section{Implementazione}
+Descrivi i dettagli implementativi. Puoi inserire snippet di codice:
+
+\begin{lstlisting}[caption={Esempio di codice C++}]
+#include <iostream>
+
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+    return 0;
+}
+\end{lstlisting}
+
+% -------------------------------------------------------
+% 5. RISULTATI
+% -------------------------------------------------------
+\section{Risultati}
+Presenta i risultati ottenuti. Puoi inserire immagini:
+
+% \begin{figure}[H]
+%     \centering
+%     \includegraphics[width=0.7\textwidth]{immagine.png}
+%     \caption{Didascalia immagine}
+%     \label{fig:etichetta}
+% \end{figure}
+
+% -------------------------------------------------------
+% 6. DISCUSSIONE
+% -------------------------------------------------------
+\section{Discussione}
+Analizza i risultati:
+\begin{itemize}
+    \item Cosa funziona bene
+    \item Limitazioni riscontrate
+    \item Possibili miglioramenti
+\end{itemize}
+
+% -------------------------------------------------------
+% 7. CONCLUSIONI
+% -------------------------------------------------------
+\section{Conclusioni}
+Riassumi il lavoro svolto e i risultati principali. 
+Indica possibili sviluppi futuri.
+
+% -------------------------------------------------------
+% BIBLIOGRAFIA
+% -------------------------------------------------------
+\newpage
+\printbibliography[title={Bibliografia}]
+
+\end{document}
