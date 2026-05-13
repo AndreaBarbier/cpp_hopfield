@@ -50,4 +50,7 @@ Thumbs.db
 
 # --- File temporanei di backup ---
 *~
-*.bak
+*.bakdocs/*.bbl
+docs/*.bcf
+docs/*.blg
+docs/*.run.xml
