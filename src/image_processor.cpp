@@ -30,4 +30,35 @@ PatternRGB imageToColors(sf::Image const& img) {
   return outPattern;
 }
 
+void resizePattern(PatternRGB& pattern, sf::Vector2u targetsize) {
+  if (targetsize.x > pattern.size.x || targetsize.y > pattern.size.y) {
+    throw std::runtime_error("Error: image size is too big.\n");
+  }
+  std::vector<sf::Color> newdata;
+  for (auto j{0u}; j != targetsize.y; ++j) {
+    for (auto i{0u}; i != targetsize.x; ++i) {
+      auto j_o = j * (pattern.size.y / targetsize.y);
+      auto i_o = i * (pattern.size.x / targetsize.x);
+      newdata.push_back(pattern.data[j_o * pattern.size.x + i_o]);
+    }
+  }
+  pattern.data = std::move(newdata);
+  pattern.size = targetsize;
+}
+
+PatternInt binarizePattern(PatternRGB const& pattern) {
+  PatternInt result;
+  for (sf::Color const& c : pattern.data) {
+    int grigio = (static_cast<int>(c.r) + static_cast<int>(c.g) +
+                  static_cast<int>(c.b)) /
+                 3;
+    if (grigio > 127) {
+      result.data.push_back(1);
+    } else {
+      result.data.push_back(-1);
+    }
+  }
+  result.size = pattern.size;
+  return result;
+}
 }  // namespace pf
