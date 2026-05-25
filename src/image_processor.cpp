@@ -5,9 +5,15 @@
 #include <vector>
 
 namespace pf {
-// ###############################################################################
-// UTILITIES ON IMAGES
-// ###############################################################################
+// ============================================================
+// IMAGE UTILITIES
+// ============================================================
+
+/// @brief Resize an image using nearest-neighbor algorithm
+/// @param[in] img Source image
+/// @param[in] targetSize Target size: it should be <=the source image's size
+/// @throws std::runtime_error if targetSize > img.getSize() or if it is (0u,0u)
+/// @return Returns an image with targetSize
 sf::Image resizeImage(sf::Image const& img, sf::Vector2u targetSize) {
   auto oldSize{img.getSize()};
   assert(targetSize.x < oldSize.x && targetSize.y < oldSize.y &&
@@ -28,18 +34,27 @@ sf::Image resizeImage(sf::Image const& img, sf::Vector2u targetSize) {
   return newImg;
 }
 
-// ###############################################################################
+// ============================================================
 // IMAGES PROCESSING
-// ###############################################################################
+// ============================================================
+
+/// @brief Generic container for 2D patterns
 template <class T>
 struct Pattern {
   std::vector<T> data;
   sf::Vector2u size;
 };
 
+/// @brief Specifc container for color patterns
 using PatternRGB = Pattern<sf::Color>;
+
+/// @brief Specific container for integer patterns
 using PatternInt = Pattern<int>;
 
+/// @brief Converts a sf::Image into a PatternRGB
+/// @param[in] img Source image
+/// @throws std::runtime_error if img.getSize() == (0u,0u)
+/// @return Returns a PatternRGB
 PatternRGB imageToColors(sf::Image const& img) {
   auto x{img.getSize().x};
   auto y{img.getSize().y};
@@ -56,6 +71,11 @@ PatternRGB imageToColors(sf::Image const& img) {
   return outPattern;
 }
 
+/// @brief Converts a PatternRGB into a PatternInt
+/// @param[in] inPattern Input PatternRGB
+/// @throws std::runtime_error if inPattern.data is empty or if inPattern.size
+/// is (0u,0u)
+/// @return Returns a PatternInt with +1 (brigth pixel) and -1 (dark pixel)
 PatternInt colorsToBinary(PatternRGB const& inPattern) {
   assert(inPattern.data.size() > 0 && inPattern.size.x > 0 &&
          inPattern.size.y > 0);
