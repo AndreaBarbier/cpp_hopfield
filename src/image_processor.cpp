@@ -10,8 +10,8 @@ namespace pf {
 // ###############################################################################
 sf::Image resizeImage(sf::Image const& img, sf::Vector2u targetSize) {
   auto oldSize{img.getSize()};
-  assert(targetSize.x > oldSize.x && targetSize.y > oldSize.y &&
-         targetSize.x == 0u && targetSize.y == 0u);
+  assert(targetSize.x < oldSize.x && targetSize.y < oldSize.y &&
+         targetSize.x > 0u && targetSize.y > 0u);
   if (targetSize.x > oldSize.x || targetSize.y > oldSize.y ||
       targetSize.x == 0u || targetSize.y == 0u) {
     throw std::runtime_error("Error: target image size is invalid.\n");
