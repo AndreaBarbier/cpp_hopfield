@@ -23,4 +23,42 @@ struct Matrix {
     return data[j * cols + i];
   }
 };
+
+/// @brief Hopfield neural network class
+class Network {
+  std::vector<sf::Image> trainImgs;
+
+ public:
+  /// @brief Adds an image into Networks's train images vector
+  /// @param[in] img Image to add
+  void addImage(sf::Image const& img) {
+    auto size{img.getSize()};
+    assert(size.x > 0u && size.y > 0u);
+    if (size.x == 0u || size.y == 0u) {
+      throw std::runtime_error("Error: invalid image.\n");
+    }
+    trainImgs.push_back(img);
+  }
+
+  /// @brief Adds multiples images into Networks's train images vector
+  /// @param[in] imgs Vector of images to add
+  void addImages(std::vector<sf::Image> const& imgs) {
+    for (auto img : imgs) {
+      addImage(img);
+    }
+  }
+
+  /// @brief Adds multiples images into Networks's train images vector
+  /// @param[in] file File in which are written the paths of the images to add
+  void addImages(std::ifstream& file) {
+    std::string absPath;
+    while (std::getline(file, absPath)) {
+      sf::Image img;
+      if (!img.loadFromFile(absPath)) {
+        throw std::runtime_error("Error: impossible to load " + absPath + '\n');
+      }
+      addImage(img);
+    }
+  }
+};
 }  // namespace hopfield
