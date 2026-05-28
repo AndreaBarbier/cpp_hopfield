@@ -90,7 +90,7 @@ std::vector<sf::Image> resizeImages(std::vector<sf::Image> const& inImgs) {
 }
 
 // ============================================================
-// IMAGES PROCESSING
+// IMAGE PROCESSING
 // ============================================================
 
 /// @brief Generic container for 2D patterns
@@ -111,16 +111,16 @@ using PatternInt = Pattern<int>;
 /// @throws std::runtime_error if img.getSize() == (0u,0u)
 /// @return Returns a PatternRGB
 PatternRGB imageToColors(sf::Image const& img) {
-  auto x{img.getSize().x};
-  auto y{img.getSize().y};
+  auto imgSize{img.getSize()};
   // Assert because it will not be a runtime error if the size is wrong
-  assert(x > 0u && y > 0u);
+  assert(imgSize.x > 0u && imgSize.y > 0u);
   PatternRGB outPattern;
-  for (auto j{0u}; j != y; ++j) {
-    for (auto i{0u}; i != x; ++i) {
+  for (auto j{0u}; j != imgSize.y; ++j) {
+    for (auto i{0u}; i != imgSize.x; ++i) {
       outPattern.data.push_back(img.getPixel(i, j));
     }
   }
+  outPattern.size = imgSize;
   return outPattern;
 }
 
@@ -129,23 +129,76 @@ PatternRGB imageToColors(sf::Image const& img) {
 /// @return Returns a PatternInt with +1 (brigth pixel) and -1 (dark pixel)
 PatternInt colorsToBinary(PatternRGB const& inPattern) {
   // Assert because it will not be a runtime error if the size is wrong
-  assert(inPattern.data.size() > 0 && inPattern.size.x > 0 &&
-         inPattern.size.y > 0);
+  assert(!inPattern.data.empty() && inPattern.size.x > 0u &&
+         inPattern.size.y > 0u);
   PatternInt outPattern;
-  for (sf::Color const& c : inPattern.data) {
+  for (auto const& c : inPattern.data) {
     auto grey = (c.r + c.g + c.b) / 3u;
-    if (grey > 127u) {
-      outPattern.data.push_back(1);
-    } else {
-      outPattern.data.push_back(-1);
-    }
+    outPattern.data.push_back((grey > 127u) ? (1) : (-1));
   }
   outPattern.size = inPattern.size;
   return outPattern;
 }
 
-PatternInt imageToBinary(sf::Image const& img){
+/// @brief Converts an image into a binary pattern
+/// @param[in] img Source image
+/// @return Returns a PatterInt with images data converted into binary data
+PatternInt imageToBinary(sf::Image const& img) {
   return colorsToBinary(imageToColors(img));
+}
+
+std::vector<PatternInt> imageToBinaries(std::vector<sf::Image> const& imgs) {
+  if (imgs.empty()) {
+    throw std::runtime_error(
+        "Error: no images to process or every image has an invalid size.\n");
+  }
+  std::vector<PatternInt> outPatterns;
+  for (auto const& img : imgs) {
+    outPatterns.push_back(imageToBinary(img));
+  }
+  return outPatterns;
+}
+
+/// @brief Converts a PatternInt into a PatternRGB
+/// @param[in] inPattern PatternInt to convert
+/// @return Returns a PatternRGB
+PatternRGB binaryToColors(PatternInt const& inPattern) {
+  assert(!inPattern.data.empty() && inPattern.size.x > 0u &&
+         inPattern.size.y > 0u);
+  PatternRGB outPattern;
+  for (auto i : inPattern.data) {
+    assert(i == 1 || i == -1);
+    outPattern.data.push_back((i == 1) ? (sf::Color::White)
+                                       : (sf::Color::Black));
+  }
+  outPattern.size = inPattern.size;
+  return outPattern;
+}
+
+/// @brief Converts a PatternRGB into an image
+/// @param[in] inPattern PatternRGB -- full of sf:.Color::Black and
+/// sf::Color::White -- to convert
+/// @return Returns an image in grey scale
+sf::Image colorsToImage(PatternRGB const& inPattern) {
+  auto x{inPattern.size.x};
+  auto y{inPattern.size.y};
+  assert(!inPattern.data.empty() && x > 0u && y > 0u);
+  sf::Image outImg;
+  outImg.create(x, y);
+
+  for (auto j{0u}; j != y; ++j) {
+    for (auto i{0u}; i != x; ++i) {
+      outImg.setPixel(i, j, inPattern.data[j * x + i]);
+    }
+  }
+  return outImg;
+}
+
+/// @brief Converts a PatternInt into an image
+/// @param[in] inPattern PatternInt to convert
+/// @return Returns an image in grey scale
+sf::Image binaryToImage(PatternInt const& inPattern) {
+  return colorsToImage(binaryToColors(inPattern));
 }
 }  // namespace pf
 
@@ -301,6 +354,304 @@ TEST_CASE("IMAGE UTILITIES") {
             CHECK(img.getPixel(i, j) == imgCyan5x5.getPixel(i, j));
           }
         }
+      }
+    }
+    SUBCASE("resizeImages -- n3") {
+      std::vector<sf::Image> inImgs{};
+
+      REQUIRE(inImgs.empty());
+      CHECK_THROWS(pf::resizeImages(inImgs));
+    }
+    SUBCASE("resizeImages -- n4") {
+      std::vector<sf::Image> inImgs;
+      inImgs.push_back(imgCyan0x0);
+      inImgs.push_back(imgCyan0x3);
+      inImgs.push_back(imgCyan3x0);
+
+      REQUIRE(!inImgs.empty());
+      CHECK_THROWS(pf::resizeImages(inImgs));
+    }
+  }
+}
+
+// ============================================================
+// IMAGE PROCESSING TEST CASE
+// ============================================================
+TEST_CASE("IMAGE PROCESSING") {
+  // ----- IMAGES -----
+  sf::Image allWhite;
+  allWhite.create(8u, 8u, sf::Color::White);
+
+  sf::Image allBlack;
+  allBlack.create(8u, 8u, sf::Color::Black);
+
+  sf::Image blackWhiteChecker;
+  blackWhiteChecker.create(8u, 8u);
+  for (auto j{0u}; j != 8u; ++j) {
+    for (auto i{0u}; i != 8u; ++i) {
+      sf::Color pixelColor =
+          ((j + i) % 2 == 0) ? sf::Color::White : sf::Color::Black;
+      blackWhiteChecker.setPixel(i, j, pixelColor);
+    }
+  }
+
+  const sf::Color colorA{220u, 50u, 50u};   // rosso
+  const sf::Color colorB{50u, 180u, 80u};   // verde
+  const sf::Color colorC{40u, 90u, 210u};   // blu
+  const sf::Color colorD{210u, 160u, 30u};  // giallo-arancio
+
+  sf::Image rgbChecker;
+  rgbChecker.create(8u, 8u);
+  for (unsigned int j{0u}; j != 8u; ++j) {
+    for (unsigned int i{0u}; i != 8u; ++i) {
+      sf::Color pixelColor;
+      if (i % 2 == 0 && j % 2 == 0)
+        pixelColor = colorA;
+      else if (i % 2 == 0 && j % 2 != 0)
+        pixelColor = colorB;
+      else if (i % 2 != 0 && j % 2 == 0)
+        pixelColor = colorC;
+      else
+        pixelColor = colorD;
+      rgbChecker.setPixel(i, j, pixelColor);
+    }
+  }
+
+  // ----- COLOR PATTERNS -----
+  pf::PatternRGB expectedAllWhiteColors;
+  expectedAllWhiteColors.size = sf::Vector2u{8u, 8u};
+  expectedAllWhiteColors.data = std::vector<sf::Color>(64, sf::Color::White);
+
+  pf::PatternRGB expectedAllBlackColors;
+  expectedAllBlackColors.size = sf::Vector2u{8u, 8u};
+  expectedAllBlackColors.data = std::vector<sf::Color>(64, sf::Color::Black);
+
+  pf::PatternRGB expectedBlackWhiteCheckerColors;
+  expectedBlackWhiteCheckerColors.size = sf::Vector2u{8u, 8u};
+  for (auto j{0u}; j != 8u; ++j) {
+    for (auto i{0u}; i != 8u; ++i) {
+      expectedBlackWhiteCheckerColors.data.push_back(
+          ((i + j) % 2 == 0) ? sf::Color::White : sf::Color::Black);
+    }
+  }
+
+  pf::PatternRGB expectedRgbCheckerColors;
+  expectedRgbCheckerColors.size = sf::Vector2u{8u, 8u};
+  for (auto j{0u}; j != 8u; ++j) {
+    for (auto i{0u}; i != 8u; ++i) {
+      sf::Color c;
+      if (i % 2 == 0 && j % 2 == 0)
+        c = colorA;
+      else if (i % 2 == 0 && j % 2 != 0)
+        c = colorB;
+      else if (i % 2 != 0 && j % 2 == 0)
+        c = colorC;
+      else
+        c = colorD;
+      expectedRgbCheckerColors.data.push_back(c);
+    }
+  }
+
+  // ----- BINARY PATTERNS -----
+  pf::PatternInt expectedAllWhiteBinary;
+  expectedAllWhiteBinary.size = sf::Vector2u{8u, 8u};
+  expectedAllWhiteBinary.data = std::vector<int>(64, 1);
+
+  pf::PatternInt expectedAllBlackBinary;
+  expectedAllBlackBinary.size = sf::Vector2u{8u, 8u};
+  expectedAllBlackBinary.data = std::vector<int>(64, -1);
+
+  pf::PatternInt expectedBlackWhiteCheckerBinary;
+  expectedBlackWhiteCheckerBinary.size = sf::Vector2u{8u, 8u};
+  for (auto j{0u}; j != 8u; ++j) {
+    for (auto i{0u}; i != 8u; ++i) {
+      expectedBlackWhiteCheckerBinary.data.push_back(((i + j) % 2 == 0) ? 1
+                                                                        : -1);
+    }
+  }
+
+  pf::PatternInt expectedRgbCheckerBinary;
+  expectedRgbCheckerBinary.size = {8u, 8u};
+  for (auto j{0u}; j != 8u; ++j) {
+    for (auto i{0u}; i != 8u; ++i) {
+      expectedRgbCheckerBinary.data.push_back((i % 2 != 0 && j % 2 != 0) ? 1
+                                                                         : -1);
+    }
+  }
+
+  SUBCASE("imageToColors") {
+    auto allWhiteColors{pf::imageToColors(allWhite)};
+    auto allBlackColors{pf::imageToColors(allBlack)};
+    auto blackWhiteCheckerColors{pf::imageToColors(blackWhiteChecker)};
+    auto rgbCheckerColors{pf::imageToColors(rgbChecker)};
+    REQUIRE(allWhiteColors.size == expectedAllWhiteColors.size);
+    REQUIRE(allWhiteColors.data.size() == expectedAllWhiteColors.data.size());
+    REQUIRE(allBlackColors.size == expectedAllBlackColors.size);
+    REQUIRE(allBlackColors.data.size() == expectedAllBlackColors.data.size());
+    REQUIRE(blackWhiteCheckerColors.size ==
+            expectedBlackWhiteCheckerColors.size);
+    REQUIRE(blackWhiteCheckerColors.data.size() ==
+            expectedBlackWhiteCheckerColors.data.size());
+    REQUIRE(rgbCheckerColors.size == expectedRgbCheckerColors.size);
+    REQUIRE(rgbCheckerColors.data.size() ==
+            expectedRgbCheckerColors.data.size());
+    for (size_t i{0}; i != allWhiteColors.data.size(); ++i) {
+      CHECK(allWhiteColors.data[i] == expectedAllWhiteColors.data[i]);
+    }
+    for (size_t i{0}; i != allBlackColors.data.size(); ++i) {
+      CHECK(allBlackColors.data[i] == expectedAllBlackColors.data[i]);
+    }
+    for (size_t i{0}; i != blackWhiteCheckerColors.data.size(); ++i) {
+      CHECK(blackWhiteCheckerColors.data[i] ==
+            expectedBlackWhiteCheckerColors.data[i]);
+    }
+    for (size_t i{0}; i != rgbCheckerColors.data.size(); ++i) {
+      CHECK(rgbCheckerColors.data[i] == expectedRgbCheckerColors.data[i]);
+    }
+  }
+  SUBCASE("imageToBinary") {
+    auto allWhiteBinary{pf::imageToBinary(allWhite)};
+    auto allBlackBinary{pf::imageToBinary(allBlack)};
+    auto blackWhiteCheckerBinary{pf::imageToBinary(blackWhiteChecker)};
+    auto rgbCheckerBinary{pf::imageToBinary(rgbChecker)};
+    REQUIRE(allWhiteBinary.size == expectedAllWhiteBinary.size);
+    REQUIRE(allWhiteBinary.data.size() == expectedAllWhiteBinary.data.size());
+    REQUIRE(allBlackBinary.size == expectedAllBlackBinary.size);
+    REQUIRE(allBlackBinary.data.size() == expectedAllBlackBinary.data.size());
+    REQUIRE(blackWhiteCheckerBinary.size ==
+            expectedBlackWhiteCheckerBinary.size);
+    REQUIRE(blackWhiteCheckerBinary.data.size() ==
+            expectedBlackWhiteCheckerBinary.data.size());
+    REQUIRE(rgbCheckerBinary.size == expectedRgbCheckerBinary.size);
+    REQUIRE(rgbCheckerBinary.data.size() ==
+            expectedRgbCheckerBinary.data.size());
+    for (size_t i{0}; i != allWhiteBinary.data.size(); ++i) {
+      CHECK(allWhiteBinary.data[i] == expectedAllWhiteBinary.data[i]);
+    }
+    for (size_t i{0}; i != allBlackBinary.data.size(); ++i) {
+      CHECK(allBlackBinary.data[i] == expectedAllBlackBinary.data[i]);
+    }
+    for (size_t i{0}; i != blackWhiteCheckerBinary.data.size(); ++i) {
+      CHECK(blackWhiteCheckerBinary.data[i] ==
+            expectedBlackWhiteCheckerBinary.data[i]);
+    }
+    for (size_t i{0}; i != rgbCheckerBinary.data.size(); ++i) {
+      CHECK(rgbCheckerBinary.data[i] == expectedRgbCheckerBinary.data[i]);
+    }
+  }
+  SUBCASE("imageToBinaries") {
+    SUBCASE("imageToBinaries -- n1") {
+      std::vector<sf::Image> imgs{allWhite, allBlack, blackWhiteChecker,
+                                  rgbChecker};
+      auto binaries{pf::imageToBinaries(imgs)};
+      REQUIRE(binaries.size() == 4);
+      REQUIRE(binaries[0].size == expectedAllWhiteBinary.size);
+      REQUIRE(binaries[0].data.size() == expectedAllWhiteBinary.data.size());
+      REQUIRE(binaries[1].size == expectedAllBlackBinary.size);
+      REQUIRE(binaries[1].data.size() == expectedAllBlackBinary.data.size());
+      REQUIRE(binaries[2].size == expectedBlackWhiteCheckerBinary.size);
+      REQUIRE(binaries[2].data.size() ==
+              expectedBlackWhiteCheckerBinary.data.size());
+      REQUIRE(binaries[3].size == expectedRgbCheckerBinary.size);
+      REQUIRE(binaries[3].data.size() == expectedRgbCheckerBinary.data.size());
+      for (size_t i{0}; i != binaries[0].data.size(); ++i) {
+        CHECK(binaries[0].data[i] == expectedAllWhiteBinary.data[i]);
+      }
+      for (size_t i{0}; i != binaries[1].data.size(); ++i) {
+        CHECK(binaries[1].data[i] == expectedAllBlackBinary.data[i]);
+      }
+      for (size_t i{0}; i != binaries[2].data.size(); ++i) {
+        CHECK(binaries[2].data[i] == expectedBlackWhiteCheckerBinary.data[i]);
+      }
+      for (size_t i{0}; i != binaries[3].data.size(); ++i) {
+        CHECK(binaries[3].data[i] == expectedRgbCheckerBinary.data[i]);
+      }
+    }
+    SUBCASE("imageToBinaries -- n2") {
+      std::vector<sf::Image> emptyImgs{};
+      CHECK_THROWS(pf::imageToBinaries(emptyImgs));
+    }
+  }
+  SUBCASE("binaryToColors") {
+    auto allWhiteColors{pf::binaryToColors(expectedAllWhiteBinary)};
+    auto allBlackColors{pf::binaryToColors(expectedAllBlackBinary)};
+    auto blackWhiteCheckerColors{
+        pf::binaryToColors(expectedBlackWhiteCheckerBinary)};
+    auto rgbCheckerColors{pf::binaryToColors(expectedRgbCheckerBinary)};
+    REQUIRE(allWhiteColors.size == expectedAllWhiteBinary.size);
+    REQUIRE(allWhiteColors.data.size() == expectedAllWhiteBinary.data.size());
+    REQUIRE(allBlackColors.size == expectedAllBlackBinary.size);
+    REQUIRE(allBlackColors.data.size() == expectedAllBlackBinary.data.size());
+    REQUIRE(blackWhiteCheckerColors.size ==
+            expectedBlackWhiteCheckerBinary.size);
+    REQUIRE(blackWhiteCheckerColors.data.size() ==
+            expectedBlackWhiteCheckerBinary.data.size());
+    REQUIRE(rgbCheckerColors.size == expectedRgbCheckerBinary.size);
+    REQUIRE(rgbCheckerColors.data.size() ==
+            expectedRgbCheckerBinary.data.size());
+    for (size_t i{0}; i != allWhiteColors.data.size(); ++i) {
+      CHECK(allWhiteColors.data[i] == sf::Color::White);
+    }
+    for (size_t i{0}; i != allBlackColors.data.size(); ++i) {
+      CHECK(allBlackColors.data[i] == sf::Color::Black);
+    }
+    for (size_t i{0}; i != blackWhiteCheckerColors.data.size(); ++i) {
+      CHECK(blackWhiteCheckerColors.data[i] ==
+            expectedBlackWhiteCheckerColors.data[i]);
+    }
+    for (size_t i{0}; i != rgbCheckerColors.data.size(); ++i) {
+      CHECK(rgbCheckerColors.data[i] ==
+            ((i % 2 != 0 && (i / 8) % 2 != 0) ? sf::Color::White
+                                               : sf::Color::Black));
+    }
+  }
+  SUBCASE("colorsToImage") {
+    auto allWhiteImg{pf::colorsToImage(expectedAllWhiteColors)};
+    auto allBlackImg{pf::colorsToImage(expectedAllBlackColors)};
+    auto blackWhiteCheckerImg{
+        pf::colorsToImage(expectedBlackWhiteCheckerColors)};
+    REQUIRE(allWhiteImg.getSize() == sf::Vector2u{8u, 8u});
+    REQUIRE(allBlackImg.getSize() == sf::Vector2u{8u, 8u});
+    REQUIRE(blackWhiteCheckerImg.getSize() == sf::Vector2u{8u, 8u});
+    for (auto j{0u}; j != 8u; ++j) {
+      for (auto i{0u}; i != 8u; ++i) {
+        CHECK(allWhiteImg.getPixel(i, j) == sf::Color::White);
+      }
+    }
+    for (auto j{0u}; j != 8u; ++j) {
+      for (auto i{0u}; i != 8u; ++i) {
+        CHECK(allBlackImg.getPixel(i, j) == sf::Color::Black);
+      }
+    }
+    for (auto j{0u}; j != 8u; ++j) {
+      for (auto i{0u}; i != 8u; ++i) {
+        CHECK(blackWhiteCheckerImg.getPixel(i, j) ==
+              expectedBlackWhiteCheckerColors.data[j * 8u + i]);
+      }
+    }
+  }
+  SUBCASE("binaryToImage") {
+    auto allWhiteImg{pf::binaryToImage(expectedAllWhiteBinary)};
+    auto allBlackImg{pf::binaryToImage(expectedAllBlackBinary)};
+    auto blackWhiteCheckerImg{
+        pf::binaryToImage(expectedBlackWhiteCheckerBinary)};
+    REQUIRE(allWhiteImg.getSize() == sf::Vector2u{8u, 8u});
+    REQUIRE(allBlackImg.getSize() == sf::Vector2u{8u, 8u});
+    REQUIRE(blackWhiteCheckerImg.getSize() == sf::Vector2u{8u, 8u});
+    for (auto j{0u}; j != 8u; ++j) {
+      for (auto i{0u}; i != 8u; ++i) {
+        CHECK(allWhiteImg.getPixel(i, j) == sf::Color::White);
+      }
+    }
+    for (auto j{0u}; j != 8u; ++j) {
+      for (auto i{0u}; i != 8u; ++i) {
+        CHECK(allBlackImg.getPixel(i, j) == sf::Color::Black);
+      }
+    }
+    for (auto j{0u}; j != 8u; ++j) {
+      for (auto i{0u}; i != 8u; ++i) {
+        CHECK(blackWhiteCheckerImg.getPixel(i, j) ==
+              expectedBlackWhiteCheckerColors.data[j * 8u + i]);
       }
     }
   }
