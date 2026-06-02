@@ -1,6 +1,6 @@
 #include "image_processor.hpp"
 
-namespace pf {
+namespace hopfield {
 // ============================================================
 // IMAGE UTILITIES
 // ============================================================
@@ -146,4 +146,4 @@ sf::Image colorsToImage(PatternRGB const& inPattern) {
 sf::Image binaryToImage(PatternInt const& inPattern) {
   return colorsToImage(binaryToColors(inPattern));
 }
-}  // namespace pf
+}  // namespace hopfield

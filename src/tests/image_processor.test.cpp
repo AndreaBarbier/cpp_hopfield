@@ -1,7 +1,8 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include "../image_processor.hpp"
+
 #include <SFML/Graphics.hpp>
 
-#include "../image_processor.hpp"
 #include "doctest.h"
 
 // ============================================================
@@ -66,10 +67,10 @@ TEST_CASE("IMAGE UTILITIES") {
 
   // Simple image validation tests
   SUBCASE("isValidImage") {
-    CHECK(!pf::isValidImage(imgEmpty));
-    CHECK(!pf::isValidImage(imgZeroW));
-    CHECK(!pf::isValidImage(imgZeroH));
-    CHECK(pf::isValidImage(imgValid));
+    CHECK(!hopfield::isValidImage(imgEmpty));
+    CHECK(!hopfield::isValidImage(imgZeroW));
+    CHECK(!hopfield::isValidImage(imgZeroH));
+    CHECK(hopfield::isValidImage(imgValid));
   }
 
   // Simple image vectors validation tests
@@ -80,7 +81,7 @@ TEST_CASE("IMAGE UTILITIES") {
     imgs.push_back(imgZeroH);
     imgs.push_back(imgValid);
 
-    auto outImgs{pf::validateImages(imgs)};
+    auto outImgs{hopfield::validateImages(imgs)};
     REQUIRE(outImgs.size() == 1);
     for (unsigned int j{0u}; j != outImgs[0].getSize().y; ++j) {
       for (unsigned int i{0u}; i != outImgs[0].getSize().x; ++i) {
@@ -92,7 +93,7 @@ TEST_CASE("IMAGE UTILITIES") {
   // Single image resize tests
   SUBCASE("resizeImage") {
     SUBCASE("resizeImage -- n1") {
-      sf::Image outImg = pf::resizeImage(img8x8, sf::Vector2u(5u, 5u));
+      sf::Image outImg = hopfield::resizeImage(img8x8, sf::Vector2u(5u, 5u));
 
       CHECK(outImg.getSize() == correctImg5x5.getSize());
       for (unsigned int j{0u}; j != correctImg5x5.getSize().y; ++j) {
@@ -103,7 +104,7 @@ TEST_CASE("IMAGE UTILITIES") {
     }
 
     SUBCASE("resizeImage -- n2") {
-      sf::Image outImg = pf::resizeImage(img8x8, sf::Vector2u(8u, 8u));
+      sf::Image outImg = hopfield::resizeImage(img8x8, sf::Vector2u(8u, 8u));
 
       REQUIRE(outImg.getSize() == img8x8.getSize());
       for (unsigned int j{0u}; j != img8x8.getSize().y; ++j) {
@@ -125,7 +126,7 @@ TEST_CASE("IMAGE UTILITIES") {
       solutions.push_back(correctImg5x5);
       solutions.push_back(imgCyan5x5);
 
-      auto outImgs{pf::resizeImages(inImgs)};
+      auto outImgs{hopfield::resizeImages(inImgs)};
 
       REQUIRE(!outImgs.empty());
       REQUIRE(outImgs.size() == 2);
@@ -145,7 +146,7 @@ TEST_CASE("IMAGE UTILITIES") {
       inImgs.push_back(imgCyan3x0);
       inImgs.push_back(imgCyan5x5);
 
-      auto outImgs{pf::resizeImages(inImgs)};
+      auto outImgs{hopfield::resizeImages(inImgs)};
 
       REQUIRE(!outImgs.empty());
       REQUIRE(outImgs.size() == 1);
@@ -162,7 +163,7 @@ TEST_CASE("IMAGE UTILITIES") {
       std::vector<sf::Image> inImgs{};
 
       REQUIRE(inImgs.empty());
-      CHECK_THROWS(pf::resizeImages(inImgs));
+      CHECK_THROWS(hopfield::resizeImages(inImgs));
     }
     SUBCASE("resizeImages -- n4") {
       std::vector<sf::Image> inImgs;
@@ -171,7 +172,7 @@ TEST_CASE("IMAGE UTILITIES") {
       inImgs.push_back(imgCyan3x0);
 
       REQUIRE(!inImgs.empty());
-      CHECK_THROWS(pf::resizeImages(inImgs));
+      CHECK_THROWS(hopfield::resizeImages(inImgs));
     }
   }
 }
@@ -220,15 +221,15 @@ TEST_CASE("IMAGE PROCESSING") {
   }
 
   // ----- COLOR PATTERNS -----
-  pf::PatternRGB expectedAllWhiteColors;
+  hopfield::PatternRGB expectedAllWhiteColors;
   expectedAllWhiteColors.size = sf::Vector2u{8u, 8u};
   expectedAllWhiteColors.data = std::vector<sf::Color>(64, sf::Color::White);
 
-  pf::PatternRGB expectedAllBlackColors;
+  hopfield::PatternRGB expectedAllBlackColors;
   expectedAllBlackColors.size = sf::Vector2u{8u, 8u};
   expectedAllBlackColors.data = std::vector<sf::Color>(64, sf::Color::Black);
 
-  pf::PatternRGB expectedBlackWhiteCheckerColors;
+  hopfield::PatternRGB expectedBlackWhiteCheckerColors;
   expectedBlackWhiteCheckerColors.size = sf::Vector2u{8u, 8u};
   for (auto j{0u}; j != 8u; ++j) {
     for (auto i{0u}; i != 8u; ++i) {
@@ -237,7 +238,7 @@ TEST_CASE("IMAGE PROCESSING") {
     }
   }
 
-  pf::PatternRGB expectedRgbCheckerColors;
+  hopfield::PatternRGB expectedRgbCheckerColors;
   expectedRgbCheckerColors.size = sf::Vector2u{8u, 8u};
   for (auto j{0u}; j != 8u; ++j) {
     for (auto i{0u}; i != 8u; ++i) {
@@ -255,15 +256,15 @@ TEST_CASE("IMAGE PROCESSING") {
   }
 
   // ----- BINARY PATTERNS -----
-  pf::PatternInt expectedAllWhiteBinary;
+  hopfield::PatternInt expectedAllWhiteBinary;
   expectedAllWhiteBinary.size = sf::Vector2u{8u, 8u};
   expectedAllWhiteBinary.data = std::vector<int>(64, 1);
 
-  pf::PatternInt expectedAllBlackBinary;
+  hopfield::PatternInt expectedAllBlackBinary;
   expectedAllBlackBinary.size = sf::Vector2u{8u, 8u};
   expectedAllBlackBinary.data = std::vector<int>(64, -1);
 
-  pf::PatternInt expectedBlackWhiteCheckerBinary;
+  hopfield::PatternInt expectedBlackWhiteCheckerBinary;
   expectedBlackWhiteCheckerBinary.size = sf::Vector2u{8u, 8u};
   for (auto j{0u}; j != 8u; ++j) {
     for (auto i{0u}; i != 8u; ++i) {
@@ -272,7 +273,7 @@ TEST_CASE("IMAGE PROCESSING") {
     }
   }
 
-  pf::PatternInt expectedRgbCheckerBinary;
+  hopfield::PatternInt expectedRgbCheckerBinary;
   expectedRgbCheckerBinary.size = {8u, 8u};
   for (auto j{0u}; j != 8u; ++j) {
     for (auto i{0u}; i != 8u; ++i) {
@@ -282,10 +283,10 @@ TEST_CASE("IMAGE PROCESSING") {
   }
 
   SUBCASE("imageToColors") {
-    auto allWhiteColors{pf::imageToColors(allWhite)};
-    auto allBlackColors{pf::imageToColors(allBlack)};
-    auto blackWhiteCheckerColors{pf::imageToColors(blackWhiteChecker)};
-    auto rgbCheckerColors{pf::imageToColors(rgbChecker)};
+    auto allWhiteColors{hopfield::imageToColors(allWhite)};
+    auto allBlackColors{hopfield::imageToColors(allBlack)};
+    auto blackWhiteCheckerColors{hopfield::imageToColors(blackWhiteChecker)};
+    auto rgbCheckerColors{hopfield::imageToColors(rgbChecker)};
     REQUIRE(allWhiteColors.size == expectedAllWhiteColors.size);
     REQUIRE(allWhiteColors.data.size() == expectedAllWhiteColors.data.size());
     REQUIRE(allBlackColors.size == expectedAllBlackColors.size);
@@ -312,10 +313,10 @@ TEST_CASE("IMAGE PROCESSING") {
     }
   }
   SUBCASE("imageToBinary") {
-    auto allWhiteBinary{pf::imageToBinary(allWhite)};
-    auto allBlackBinary{pf::imageToBinary(allBlack)};
-    auto blackWhiteCheckerBinary{pf::imageToBinary(blackWhiteChecker)};
-    auto rgbCheckerBinary{pf::imageToBinary(rgbChecker)};
+    auto allWhiteBinary{hopfield::imageToBinary(allWhite)};
+    auto allBlackBinary{hopfield::imageToBinary(allBlack)};
+    auto blackWhiteCheckerBinary{hopfield::imageToBinary(blackWhiteChecker)};
+    auto rgbCheckerBinary{hopfield::imageToBinary(rgbChecker)};
     REQUIRE(allWhiteBinary.size == expectedAllWhiteBinary.size);
     REQUIRE(allWhiteBinary.data.size() == expectedAllWhiteBinary.data.size());
     REQUIRE(allBlackBinary.size == expectedAllBlackBinary.size);
@@ -345,7 +346,7 @@ TEST_CASE("IMAGE PROCESSING") {
     SUBCASE("imageToBinaries -- n1") {
       std::vector<sf::Image> imgs{allWhite, allBlack, blackWhiteChecker,
                                   rgbChecker};
-      auto binaries{pf::imageToBinaries(imgs)};
+      auto binaries{hopfield::imageToBinaries(imgs)};
       REQUIRE(binaries.size() == 4);
       REQUIRE(binaries[0].size == expectedAllWhiteBinary.size);
       REQUIRE(binaries[0].data.size() == expectedAllWhiteBinary.data.size());
@@ -371,15 +372,15 @@ TEST_CASE("IMAGE PROCESSING") {
     }
     SUBCASE("imageToBinaries -- n2") {
       std::vector<sf::Image> emptyImgs{};
-      CHECK_THROWS(pf::imageToBinaries(emptyImgs));
+      CHECK_THROWS(hopfield::imageToBinaries(emptyImgs));
     }
   }
   SUBCASE("binaryToColors") {
-    auto allWhiteColors{pf::binaryToColors(expectedAllWhiteBinary)};
-    auto allBlackColors{pf::binaryToColors(expectedAllBlackBinary)};
+    auto allWhiteColors{hopfield::binaryToColors(expectedAllWhiteBinary)};
+    auto allBlackColors{hopfield::binaryToColors(expectedAllBlackBinary)};
     auto blackWhiteCheckerColors{
-        pf::binaryToColors(expectedBlackWhiteCheckerBinary)};
-    auto rgbCheckerColors{pf::binaryToColors(expectedRgbCheckerBinary)};
+        hopfield::binaryToColors(expectedBlackWhiteCheckerBinary)};
+    auto rgbCheckerColors{hopfield::binaryToColors(expectedRgbCheckerBinary)};
     REQUIRE(allWhiteColors.size == expectedAllWhiteBinary.size);
     REQUIRE(allWhiteColors.data.size() == expectedAllWhiteBinary.data.size());
     REQUIRE(allBlackColors.size == expectedAllBlackBinary.size);
@@ -408,10 +409,10 @@ TEST_CASE("IMAGE PROCESSING") {
     }
   }
   SUBCASE("colorsToImage") {
-    auto allWhiteImg{pf::colorsToImage(expectedAllWhiteColors)};
-    auto allBlackImg{pf::colorsToImage(expectedAllBlackColors)};
+    auto allWhiteImg{hopfield::colorsToImage(expectedAllWhiteColors)};
+    auto allBlackImg{hopfield::colorsToImage(expectedAllBlackColors)};
     auto blackWhiteCheckerImg{
-        pf::colorsToImage(expectedBlackWhiteCheckerColors)};
+        hopfield::colorsToImage(expectedBlackWhiteCheckerColors)};
     REQUIRE(allWhiteImg.getSize() == sf::Vector2u{8u, 8u});
     REQUIRE(allBlackImg.getSize() == sf::Vector2u{8u, 8u});
     REQUIRE(blackWhiteCheckerImg.getSize() == sf::Vector2u{8u, 8u});
@@ -433,10 +434,10 @@ TEST_CASE("IMAGE PROCESSING") {
     }
   }
   SUBCASE("binaryToImage") {
-    auto allWhiteImg{pf::binaryToImage(expectedAllWhiteBinary)};
-    auto allBlackImg{pf::binaryToImage(expectedAllBlackBinary)};
+    auto allWhiteImg{hopfield::binaryToImage(expectedAllWhiteBinary)};
+    auto allBlackImg{hopfield::binaryToImage(expectedAllBlackBinary)};
     auto blackWhiteCheckerImg{
-        pf::binaryToImage(expectedBlackWhiteCheckerBinary)};
+        hopfield::binaryToImage(expectedBlackWhiteCheckerBinary)};
     REQUIRE(allWhiteImg.getSize() == sf::Vector2u{8u, 8u});
     REQUIRE(allBlackImg.getSize() == sf::Vector2u{8u, 8u});
     REQUIRE(blackWhiteCheckerImg.getSize() == sf::Vector2u{8u, 8u});

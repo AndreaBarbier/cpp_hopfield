@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <vector>
 
-namespace pf {
+namespace hopfield {
 // ============================================================
 // IMAGE UTILITIES
 // ============================================================
@@ -30,7 +30,8 @@ sf::Image resizeImage(sf::Image const& img, sf::Vector2u targetSize);
 
 /// @brief Resizes all the images inside a vector
 /// @param[in] inImgs Images vector
-/// @throws std::runtime_error if the image vector is empty or full of invalid images
+/// @throws std::runtime_error if the image vector is empty or full of invalid
+/// images
 /// @return Returns a vector with all the valid images scaled
 std::vector<sf::Image> resizeImages(std::vector<sf::Image> const& inImgs);
 
@@ -69,13 +70,15 @@ PatternInt imageToBinary(sf::Image const& img);
 
 /// @brief Converts an image vector into a binary pattern vector
 /// @param[in] imgs Image vector
-/// @throws std::runtime_error if the image vector is empty or full of invalid images 
+/// @throws std::runtime_error if the image vector is empty or full of invalid
+/// images
 /// @return Returns a vector of PatterInt
 std::vector<PatternInt> imageToBinaries(std::vector<sf::Image> const& imgs);
 
 /// @brief Converts a PatternInt into a PatternRGB
 /// @param[in] inPattern PatternInt to convert
-/// @return Returns a PatternRGB with sf::Color::White (+1) and sf::Color::Black (-1)
+/// @return Returns a PatternRGB with sf::Color::White (+1) and sf::Color::Black
+/// (-1)
 PatternRGB binaryToColors(PatternInt const& inPattern);
 
 /// @brief Converts a PatternRGB into an image
@@ -88,6 +91,6 @@ sf::Image colorsToImage(PatternRGB const& inPattern);
 /// @param[in] inPattern PatternInt to convert
 /// @return Returns an image in grey scale
 sf::Image binaryToImage(PatternInt const& inPattern);
-}  // namespace pf
+}  // namespace hopfield
 
 #endif
