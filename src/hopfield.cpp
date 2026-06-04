@@ -9,6 +9,19 @@
 
 namespace hopfield {
 // ============================================================
+// SIGN FUNCTION
+// ============================================================
+
+/// @brief Returns the sign of a value
+/// @tparam T Numeric type
+/// @param[in] val The value to evaluate
+/// @return Returns 1 if val > 0, -1 if val < 0, 0 if val == 0
+template <class T>
+int sgn(T val) {
+  return ((T{0} < val) - (T{0} > val))
+}
+
+// ============================================================
 // WEIGHT MATRIX
 // ============================================================
 
@@ -27,11 +40,19 @@ struct Matrix {
   }
 };
 
+// ============================================================
+// NEURLA NETWORK
+// ============================================================
+
 /// @brief Hopfield neural network class
 class Network {
   std::vector<sf::Image> trainImgs;
+  std::string wMatrixFilePath;
 
  public:
+  Network(std::string const& wMatrixFilePath)
+      : wMatrixFilePath(wMatrixFilePath) {}
+
   /// @brief Adds an image into Networks's train images vector
   /// @param[in] img Image to add
   void addImage(sf::Image const& img) {
@@ -69,30 +90,30 @@ class Network {
   }
 
   /// @brief Trains the neural network using the Hebb rule
-  /// @param[in] absPath Path of the file where the matrix will be written
   /// @throws std::runtime_error if it is not possible to open the file
   /// @return Returns the weights matrix and writes it on a file
-  Matrix train(std::string const& absPath) const {
+  Matrix train() const {
     auto resizedImgs{resizeImages(validateImages(trainImgs))};
     size_t newWidth{resizedImgs[0].getSize().x};
     size_t newHeight{resizedImgs[0].getSize().y};
-    for(auto const& img: resizedImgs){
+    for (auto const& img : resizedImgs) {
       assert(img.getSize().x == newWidth);
       assert(img.getSize().y == newHeight);
     }
     size_t const N{newWidth * newHeight};
-    std::vector<std::vector<int>> binaryPatterns;
-    // Converts every image into PatternInt
+    std::vector<PatternInt> binaryPatterns{imageToBinaries(resizedImgs)};
 
     Matrix w{N, N};
-    std::ofstream file{absPath};
+    std::ofstream file{wMatrixFilePath};
     if (!file.is_open()) {
-      std::runtime_error("Error: impossible to open the file.");
+      std::runtime_error("Error: impossible to open the file " +
+                         wMatrixFilePath);
     }
     for (size_t j{0}; j != newHeight; ++j) {
       for (size_t i{0}; i != newWidth; ++i) {
         for (auto pattern : binaryPatterns) {
-          w(j, i) = pattern[i] * pattern[j] / N;
+          w(j, i) = static_cast<double>(pattern.data[i]) *
+                    static_cast<double>(pattern.data[j]) / N;
           file << w(i, j);
         }
       }
