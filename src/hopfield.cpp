@@ -18,7 +18,7 @@ namespace hopfield {
 /// @return Returns 1 if val > 0, -1 if val < 0, 0 if val == 0
 template <class T>
 int sgn(T val) {
-  return ((T{0} < val) - (T{0} > val))
+  return ((T{0} < val) - (T{0} > val));
 }
 
 // ============================================================
@@ -110,16 +110,63 @@ class Network {
                          wMatrixFilePath);
     }
     for (size_t j{0}; j != newHeight; ++j) {
-      for (size_t i{0}; i != newWidth; ++i) {
+      for (size_t i{j}; i != newWidth; ++i) {
         for (auto pattern : binaryPatterns) {
-          w(j, i) = static_cast<double>(pattern.data[i]) *
-                    static_cast<double>(pattern.data[j]) / N;
-          file << w(i, j);
+          w(j, i) += static_cast<double>(pattern.data[i]) *
+                     static_cast<double>(pattern.data[j]) / N;
         }
+        w(i, j) = w(j, i);
+      }
+    }
+
+    for (size_t j{0}; j != newHeight; ++j) {
+      for (size_t i{0}; i != newWidth; ++i) {
+        file << w(j, i);
       }
     }
     file.close();
     return w;
+  }
+
+  PatternInt recall(PatternInt const& inPattern) {
+    auto intPatterns{imageToBinaries(resizeImages(validateImages(trainImgs)))};
+    size_t newWidth{intPatterns[0].size.x};
+    size_t newHeight{intPatterns[0].size.y};
+    for (auto const& pattern : intPatterns) {
+      assert(pattern.size.x == newWidth);
+      assert(pattern.size.y == newHeight);
+      assert(inPattern.size == pattern.size);
+    }
+
+    size_t const N{newWidth * newHeight};
+    Matrix w{N, N};
+    std::ifstream file{wMatrixFilePath};
+    if (!file.is_open()) {
+      std::runtime_error("Error: impossible to open the file " +
+                         wMatrixFilePath);
+    }
+    for (size_t j{0}; j != newHeight; ++j) {
+      for (size_t i{0}; i != newWidth; ++i) {
+        file >> w(i, j);
+      }
+    }
+
+    PatternInt oldPattern{};
+    PatternInt newPattern{inPattern};
+    oldPattern.size = inPattern.size;
+
+    while (newPattern != oldPattern) {
+      oldPattern.data = newPattern.data;
+      for (size_t i{0}; i != N; ++i) {
+        newPattern.data[i];
+        for (size_t j{0}; j != N; ++j) {
+          newPattern.data[i] += sgn(w(i, j) * oldPattern.data[j]);
+        }
+      }
+    }
+    
+    file.close();
+    return newPattern;
   }
 };
 }  // namespace hopfield
