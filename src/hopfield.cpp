@@ -46,7 +46,8 @@ struct Matrix {
 
 /// @brief Hopfield neural network class
 class Network {
-  std::vector<sf::Image> trainImgs;
+  std::vector<sf::Image> trainImgs{};
+  sf::Vector2u validSize{0u, 0u};
   std::string wMatrixFilePath;
 
  public:
@@ -89,18 +90,36 @@ class Network {
     }
   }
 
-  /// @brief Trains the neural network using the Hebb rule
-  /// @throws std::runtime_error if it is not possible to open the file
-  /// @return Returns the weights matrix and writes it on a file
-  Matrix train() const {
-    auto resizedImgs{resizeImages(validateImages(trainImgs))};
-    size_t newWidth{resizedImgs[0].getSize().x};
-    size_t newHeight{resizedImgs[0].getSize().y};
-    for (auto const& img : resizedImgs) {
-      assert(img.getSize().x == newWidth);
-      assert(img.getSize().y == newHeight);
+  /// @brief Trains the Hopfield network on the loaded images using the Hebb
+  /// rule.
+  /// @details Computes the symmetric weight matrix from the binary patterns
+  ///          extracted from the training images. The diagonal is set to zero
+  ///          to prevent self-reinforcement. The resulting matrix is written
+  ///          to the file specified at construction and cached for later use.
+  /// @return The computed weight matrix.
+  /// @throws std::runtime_error If no images have been loaded via addImage().
+  /// @throws std::runtime_error If all loaded images have invalid size.
+  /// @throws std::runtime_error If the weight matrix file cannot be opened.
+  /// @note Call addImage() at least once before invoking this function.
+  Matrix train() {
+    if (trainImgs.empty()) {
+      throw std::runtime_error(
+          "Error: empty training dataset. Please call addImage() or "
+          "addImages() before train().\n");
     }
-    size_t const N{newWidth * newHeight};
+    auto resizedImgs{resizeImages(validateImages(trainImgs))};
+    if (trainImgs.empty()) {
+      throw std::runtime_error(
+          "Error: invalid training dataset. Every image had an invalid "
+          "size.\n");
+    }
+    validSize = {resizedImgs[0].getSize()};
+    for (auto const& img : resizedImgs) {
+      assert(img.getSize().x != 0u);
+      assert(img.getSize().y != 0u);
+      assert(img.getSize() == validSize);
+    }
+    size_t const N{validSize.x * validSize.y};
     std::vector<PatternInt> binaryPatterns{imageToBinaries(resizedImgs)};
 
     Matrix w{N, N};
@@ -109,18 +128,22 @@ class Network {
       std::runtime_error("Error: impossible to open the file " +
                          wMatrixFilePath);
     }
-    for (size_t j{0}; j != newHeight; ++j) {
-      for (size_t i{j}; i != newWidth; ++i) {
-        for (auto pattern : binaryPatterns) {
-          w(j, i) += static_cast<double>(pattern.data[i]) *
-                     static_cast<double>(pattern.data[j]) / N;
+    for (size_t j{0}; j != N; ++j) {
+      for (size_t i{j}; i != N; ++i) {
+        if (i == j) {
+          w(j, i) = 0;
+        } else {
+          for (auto pattern : binaryPatterns) {
+            w(j, i) += static_cast<double>(pattern.data[i]) *
+                       static_cast<double>(pattern.data[j]) / N;
+          }
         }
         w(i, j) = w(j, i);
       }
     }
 
-    for (size_t j{0}; j != newHeight; ++j) {
-      for (size_t i{0}; i != newWidth; ++i) {
+    for (size_t j{0}; j != N; ++j) {
+      for (size_t i{0}; i != N; ++i) {
         file << w(j, i);
       }
     }
@@ -128,26 +151,32 @@ class Network {
     return w;
   }
 
+  /// @brief Reconstructs a stored pattern from a partial or noisy input.
+  /// @details Iteratively updates the pattern using the trained weight matrix
+  ///          until convergence, following the Hopfield network dynamics.
+  /// @param inPattern The input pattern to reconstruct. Must match the size
+  ///                  of the patterns used during training.
+  /// @return The reconstructed pattern after convergence.
+  /// @throws std::runtime_error If the network has not been trained yet.
+  /// @throws std::runtime_error If the weight matrix file cannot be opened.
   PatternInt recall(PatternInt const& inPattern) {
-    auto intPatterns{imageToBinaries(resizeImages(validateImages(trainImgs)))};
-    size_t newWidth{intPatterns[0].size.x};
-    size_t newHeight{intPatterns[0].size.y};
-    for (auto const& pattern : intPatterns) {
-      assert(pattern.size.x == newWidth);
-      assert(pattern.size.y == newHeight);
-      assert(inPattern.size == pattern.size);
+    if (validSize == sf::Vector2u{0u, 0u}) {
+      throw std::runtime_error(
+          "Error: the network has not been trained yet. "
+          "Please call train() before recall().\n");
     }
+    assert(inPattern.size == validSize);
 
-    size_t const N{newWidth * newHeight};
+    size_t const N{validSize.x * validSize.y};
     Matrix w{N, N};
     std::ifstream file{wMatrixFilePath};
     if (!file.is_open()) {
       std::runtime_error("Error: impossible to open the file " +
                          wMatrixFilePath);
     }
-    for (size_t j{0}; j != newHeight; ++j) {
-      for (size_t i{0}; i != newWidth; ++i) {
-        file >> w(i, j);
+    for (size_t j{0}; j != N; ++j) {
+      for (size_t i{0}; i != N; ++i) {
+        file >> w(j, i);
       }
     }
 
@@ -157,14 +186,14 @@ class Network {
 
     while (newPattern != oldPattern) {
       oldPattern.data = newPattern.data;
-      for (size_t i{0}; i != N; ++i) {
-        newPattern.data[i];
-        for (size_t j{0}; j != N; ++j) {
-          newPattern.data[i] += sgn(w(i, j) * oldPattern.data[j]);
+      for (size_t j{0}; j != N; ++j) {
+        newPattern.data[j] = 0;
+        for (size_t i{0}; i != N; ++i) {
+          newPattern.data[j] += sgn(w(j, i) * oldPattern.data[i]);
         }
       }
     }
-    
+
     file.close();
     return newPattern;
   }
