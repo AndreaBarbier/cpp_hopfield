@@ -1,3 +1,4 @@
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <SFML/Graphics.hpp>
 #include <algorithm>
 #include <cassert>
@@ -7,6 +8,7 @@
 #include <vector>
 
 #include "image_processor.hpp"
+#include "tests/doctest.h"
 
 namespace hopfield {
 // ============================================================
@@ -29,24 +31,59 @@ int sgn(T val) {
 /// @brief 2D matrix with row-major storage, used to represent the network's
 /// weight matrix.
 /// @details Stores elements as a flat vector of doubles, accessible via (i, j)
-/// indexing.
-///          The element at row i and column j is stored at data[i * cols + j].
+/// indexing. The element at row i and column j is stored at data[i * cols + j].
 struct Matrix {
   size_t rows;
   size_t cols;
-  std::vector<double> data;
+  std::vector<double> matrix;
 
   /// @brief Constructs a zero-initialized matrix of the given dimensions.
-  /// @param rows Number of rows.
-  /// @param cols Number of columns.
-  Matrix(size_t rows, size_t cols)
-      : rows{rows}, cols{cols}, data(rows * cols, 0.0) {}
+  /// @param r Number of rows. Must be different from 0.
+  /// @param c Number of columns. Must be different from 0.
+  Matrix(size_t r, size_t c) : rows{r}, cols{c}, matrix(r * c, 0.0) {
+    if (r == 0 || c == 0) {
+      throw std::runtime_error("Error: invalid matrix size inserted.");
+    }
+  }
+  /// @brief Constructs a matrix of the given dimensions from an existing data
+  /// vector.
+  /// @param r Number of rows. Must be different from 0.
+  /// @param c Number of columns. Must be different from 0.
+  /// @param data Flat vector of doubles in row-major order. Must have size r *
+  /// c.
+  /// @throws std::runtime_error If r or c are 0.
+  /// @throws std::runtime_error If data.size() != r * c.
+  Matrix(size_t r, size_t c, std::vector<double> const& data)
+      : rows{r}, cols{c}, matrix{data} {
+    if (rows == 0 || cols == 0) {
+      throw std::runtime_error("Error: invalid matrix size inserted.");
+    }
+    if (data.size() != rows * cols) {
+      throw std::runtime_error("Error: invalid data lenght inserted");
+    }
+  }
 
   /// @brief Returns a reference to the element at row i, column j.
-  double& operator()(size_t i, size_t j) { return data[j * cols + i]; }
+  /// @param i Row index (0-based).
+  /// @param j Column index (0-based).
+  /// @throws std::runtime_error If i or j are out of range.
+  double& operator()(size_t i, size_t j) {
+    assert(rows > 0 && cols > 0);
+    if (i >= rows || j >= cols) {
+      throw std::runtime_error("Error: index out of range.");
+    }
+    return matrix[i * cols + j];
+  }
   /// @brief Returns a const reference to the element at row i, column j.
+  /// @param i Row index (0-based).
+  /// @param j Column index (0-based).
+  /// @throws std::runtime_error If i or j are out of range.
   double const& operator()(size_t i, size_t j) const {
-    return data[j * cols + i];
+    assert(rows > 0 && cols > 0);
+    if (i >= rows || j >= cols) {
+      throw std::runtime_error("Error: index out of range.");
+    }
+    return matrix[i * cols + j];
   }
 };
 
@@ -56,16 +93,16 @@ struct Matrix {
 
 /// @brief Hopfield neural network class
 class Network {
-  std::vector<sf::Image> trainImgs{};
-  sf::Vector2u validSize{0u, 0u};
-  std::string wMatrixFilePath;
+  std::vector<sf::Image> trainImgs_{};
+  sf::Vector2u validSize_{0u, 0u};
+  std::string wMatrixFilePath_;
 
  public:
   /// @brief Contructs an empty hopfield neural network, only with the path of
   /// the matrix storege file.
   /// @param[in] wMatrixFilePath Matrix storege file.
   Network(std::string const& wMatrixFilePath)
-      : wMatrixFilePath(wMatrixFilePath) {}
+      : wMatrixFilePath_(wMatrixFilePath) {}
 
   /// @brief Adds an image into Networks's train images vector
   /// @param[in] img Image to add
@@ -75,7 +112,7 @@ class Network {
     if (size.x == 0u || size.y == 0u) {
       throw std::runtime_error("Error: invalid image.\n");
     }
-    trainImgs.push_back(img);
+    trainImgs_.push_back(img);
   }
 
   /// @brief Adds multiple images into Networks's train images vector
@@ -115,31 +152,31 @@ class Network {
   /// @throws std::runtime_error If the weight matrix file cannot be opened.
   /// @note Call addImage() at least once before invoking this function.
   Matrix train() {
-    if (trainImgs.empty()) {
+    if (trainImgs_.empty()) {
       throw std::runtime_error(
           "Error: empty training dataset. Please call addImage() or "
           "addImages() before train().\n");
     }
-    auto resizedImgs{resizeImages(validateImages(trainImgs))};
-    if (trainImgs.empty()) {
+    auto resizedImgs{resizeImages(validateImages(trainImgs_))};
+    if (trainImgs_.empty()) {
       throw std::runtime_error(
           "Error: invalid training dataset. Every image had an invalid "
           "size.\n");
     }
-    validSize = {resizedImgs[0].getSize()};
+    validSize_ = {resizedImgs[0].getSize()};
     for (auto const& img : resizedImgs) {
       assert(img.getSize().x != 0u);
       assert(img.getSize().y != 0u);
-      assert(img.getSize() == validSize);
+      assert(img.getSize() == validSize_);
     }
-    size_t const N{validSize.x * validSize.y};
+    size_t const N{validSize_.x * validSize_.y};
     std::vector<PatternInt> binaryPatterns{imageToBinaries(resizedImgs)};
 
     Matrix w{N, N};
-    std::ofstream file{wMatrixFilePath};
+    std::ofstream file{wMatrixFilePath_};
     if (!file.is_open()) {
       std::runtime_error("Error: impossible to open the file " +
-                         wMatrixFilePath);
+                         wMatrixFilePath_);
     }
     for (size_t j{0}; j != N; ++j) {
       for (size_t i{j}; i != N; ++i) {
@@ -148,7 +185,8 @@ class Network {
         } else {
           for (auto pattern : binaryPatterns) {
             w(j, i) += static_cast<double>(pattern.data[i]) *
-                       static_cast<double>(pattern.data[j]) / N;
+                       static_cast<double>(pattern.data[j]) /
+                       static_cast<double>(N);
           }
         }
         w(i, j) = w(j, i);
@@ -178,20 +216,20 @@ class Network {
   PatternInt recall(
       PatternInt const& inPattern,
       std::function<void(PatternInt const& newPattern, size_t id)> const&
-          callback = [](PatternInt const& newPattern, size_t id) {}) const {
-    if (validSize == sf::Vector2u{0u, 0u}) {
+          callback = [](PatternInt const&, size_t) {}) const {
+    if (validSize_ == sf::Vector2u{0u, 0u}) {
       throw std::runtime_error(
           "Error: the network has not been trained yet. "
           "Please call train() before recall().\n");
     }
-    assert(inPattern.size == validSize);
+    assert(inPattern.size == validSize_);
 
-    size_t const N{validSize.x * validSize.y};
+    size_t const N{validSize_.x * validSize_.y};
     Matrix w{N, N};
-    std::ifstream file{wMatrixFilePath};
+    std::ifstream file{wMatrixFilePath_};
     if (!file.is_open()) {
       std::runtime_error("Error: impossible to open the file " +
-                         wMatrixFilePath);
+                         wMatrixFilePath_);
     }
     for (size_t j{0}; j != N; ++j) {
       for (size_t i{0}; i != N; ++i) {
@@ -221,3 +259,23 @@ class Network {
   }
 };
 }  // namespace hopfield
+
+TEST_CASE("MATRIX STRUCT") {
+  SUBCASE("Invalid Matrix") {
+    CHECK_THROWS(hopfield::Matrix{0, 3});
+    CHECK_THROWS(hopfield::Matrix{3, 0});
+    CHECK_THROWS(hopfield::Matrix{0, 0});
+  }
+  SUBCASE("Matrix operator()") {
+    std::vector<double> data{0.0, 1.0, 2.0, 3.0, 4.0,  5.0,
+                             6.0, 7.0, 8.0, 9.0, 10.0, 11.0};
+    hopfield::Matrix m{3, 4, data};
+
+    CHECK(m(0, 0) == 0.0);
+    CHECK(m(0, 3) == 3.0);
+    CHECK(m(2, 3) == 11.0);
+    CHECK_THROWS(m(3, 0));
+    CHECK_THROWS(m(0, 4));
+    CHECK_THROWS(m(3, 4));
+  }
+}
