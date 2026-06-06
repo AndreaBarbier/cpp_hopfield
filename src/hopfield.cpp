@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cassert>
 #include <fstream>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -25,16 +26,25 @@ int sgn(T val) {
 // WEIGHT MATRIX
 // ============================================================
 
-/// @brief Matrix struct -- it represents the network's memory
+/// @brief 2D matrix with row-major storage, used to represent the network's
+/// weight matrix.
+/// @details Stores elements as a flat vector of doubles, accessible via (i, j)
+/// indexing.
+///          The element at row i and column j is stored at data[i * cols + j].
 struct Matrix {
   size_t rows;
   size_t cols;
   std::vector<double> data;
 
+  /// @brief Constructs a zero-initialized matrix of the given dimensions.
+  /// @param rows Number of rows.
+  /// @param cols Number of columns.
   Matrix(size_t rows, size_t cols)
       : rows{rows}, cols{cols}, data{std::vector<double>(rows * cols, 0.0)} {}
 
+  /// @brief Returns a reference to the element at row i, column j.
   double& operator()(size_t i, size_t j) { return data[j * cols + i]; }
+  /// @brief Returns a const reference to the element at row i, column j.
   double const& operator()(size_t i, size_t j) const {
     return data[j * cols + i];
   }
@@ -51,6 +61,9 @@ class Network {
   std::string wMatrixFilePath;
 
  public:
+  /// @brief Contructs an empty hopfield neural network, only with the path of
+  /// the matrix storege file.
+  /// @param[in] wMatrixFilePath Matrix storege file.
   Network(std::string const& wMatrixFilePath)
       : wMatrixFilePath(wMatrixFilePath) {}
 
@@ -154,12 +167,18 @@ class Network {
   /// @brief Reconstructs a stored pattern from a partial or noisy input.
   /// @details Iteratively updates the pattern using the trained weight matrix
   ///          until convergence, following the Hopfield network dynamics.
-  /// @param inPattern The input pattern to reconstruct. Must match the size
+  /// @param[in] inPattern The input pattern to reconstruct. Must match the size
   ///                  of the patterns used during training.
+  /// @param[in] callback An optional callable invoked at each iteration with
+  /// the current intermediate pattern and the iteration index. Defaults to a
+  /// no-op.
   /// @return The reconstructed pattern after convergence.
   /// @throws std::runtime_error If the network has not been trained yet.
   /// @throws std::runtime_error If the weight matrix file cannot be opened.
-  PatternInt recall(PatternInt const& inPattern) {
+  PatternInt recall(
+      PatternInt const& inPattern,
+      std::function<void(PatternInt const& newPattern, size_t id)> const&
+          callback = [](PatternInt const& newPattern, size_t id) {}) const {
     if (validSize == sf::Vector2u{0u, 0u}) {
       throw std::runtime_error(
           "Error: the network has not been trained yet. "
@@ -184,6 +203,7 @@ class Network {
     PatternInt newPattern{inPattern};
     oldPattern.size = inPattern.size;
 
+    size_t id{0};
     while (newPattern != oldPattern) {
       oldPattern.data = newPattern.data;
       for (size_t j{0}; j != N; ++j) {
@@ -192,6 +212,8 @@ class Network {
           newPattern.data[j] += sgn(w(j, i) * oldPattern.data[i]);
         }
       }
+      callback(newPattern, id);
+      ++id;
     }
 
     file.close();
