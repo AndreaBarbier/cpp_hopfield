@@ -40,7 +40,7 @@ struct Matrix {
   /// @param rows Number of rows.
   /// @param cols Number of columns.
   Matrix(size_t rows, size_t cols)
-      : rows{rows}, cols{cols}, data{std::vector<double>(rows * cols, 0.0)} {}
+      : rows{rows}, cols{cols}, data(rows * cols, 0.0) {}
 
   /// @brief Returns a reference to the element at row i, column j.
   double& operator()(size_t i, size_t j) { return data[j * cols + i]; }
