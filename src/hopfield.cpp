@@ -2,6 +2,7 @@
 #include <SFML/Graphics.hpp>
 #include <algorithm>
 #include <cassert>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <string>
@@ -95,7 +96,7 @@ struct Matrix {
 class Network {
   std::vector<sf::Image> trainImgs_{};
   sf::Vector2u validSize_{0u, 0u};
-  std::string wMatrixFilePath_{};
+  std::string wMatrixFilePath_{"data/matrix.txt"};
 
  public:
   /// @brief Contructs an empty hopfield neural network, only with the path of
@@ -126,16 +127,11 @@ class Network {
   /// @brief Adds multiple images into Networks's train images vector
   /// @throws std::runtime_error if it is not possible to open the file
   /// @param[in] file File in which are written the paths of the images to add
-  void addImages(std::ifstream& file) {
-    if (!file.is_open()) {
-      std::runtime_error("Error: impossible to open the file.");
-    }
-    std::string absPath;
-    while (std::getline(file, absPath)) {
-      sf::Image img;
-      if (!img.loadFromFile(absPath)) {
-        throw std::runtime_error("Error: impossible to load " + absPath + '\n');
-      }
+  void addImages(std::filesystem::path const& imgsPath = "data/train/") {
+    assert(std::filesystem::exists(imgsPath));
+    for (auto const& file : std::filesystem::directory_iterator{imgsPath}) {
+      sf::Image img{};
+      img.loadFromFile(file.path());
       addImage(img);
     }
   }
@@ -175,8 +171,8 @@ class Network {
     Matrix w{N, N};
     std::ofstream file{wMatrixFilePath_};
     if (!file.is_open()) {
-      std::runtime_error("Error: impossible to open the file " +
-                         wMatrixFilePath_);
+      throw std::runtime_error("Error: impossible to open the file " +
+                               wMatrixFilePath_);
     }
     for (size_t j{0}; j != N; ++j) {
       for (size_t i{j}; i != N; ++i) {
@@ -200,6 +196,34 @@ class Network {
     }
     file.close();
     return w;
+  }
+
+  /// @brief Calculates the total energy of the neuronal network.
+  ///
+  /// This function evaluates the energy state of a network (e.g., Hopfield
+  /// network) using the state vector of the neurons and the weight matrix.
+  ///
+  /// @param neuron A constant reference to a vector of integers representing
+  /// the neuron states.
+  /// @param w A constant reference to the weight matrix of the network.
+  /// @return The calculated double-precision energy value of the network.
+  /// @note Uses assertions to ensure the network is not empty and that the
+  /// weight matrix
+  ///       dimensions match the size of the neuron vector.
+  double energy(std::vector<int> const& neuron, Matrix const& w) {
+    assert(!neuron.empty());
+    assert(neuron.size() == w.cols && neuron.size() == w.rows);
+
+    double energy{0.0};
+    const size_t size = neuron.size();
+
+    for (size_t i{0}; i != size; ++i) {
+      for (size_t j{0}; j != size; ++j) {
+        energy += -0.5 * w(i, j) * neuron[i] * neuron[j];
+      }
+    }
+
+    return energy;
   }
 
   /// @brief Reconstructs a stored pattern from a partial or noisy input.
@@ -280,5 +304,44 @@ TEST_CASE("MATRIX STRUCT") {
   }
 }
 
-TEST_CASE("HOPFIELD NETWORK"){
+TEST_CASE("HOPFIELD NETWORK") {
+  SUBCASE("Network::train") {
+    hopfield::Network net{"data/test_matrix.txt"};
+
+    SUBCASE("Empty dataset throws") {
+      CHECK_THROWS_AS(net.train(), std::runtime_error);
+    }
+
+    SUBCASE("Weight matrix is symmetric with zero diagonal") {
+      sf::Image img1{};
+      img1.create(2, 2, sf::Color::White);
+      sf::Image img2{};
+      img2.create(2, 2, sf::Color::Black);
+      net.addImage(img1);
+      net.addImage(img2);
+      auto w = net.train();
+      for (size_t i = 0; i < w.rows; ++i) {
+        CHECK(w(i, i) == doctest::Approx(0.0));
+        for (size_t j = 0; j < w.cols; ++j) {
+          CHECK(w(i, j) == doctest::Approx(w(j, i)));
+        }
+      }
+    }
+  }
+
+  SUBCASE("Network::energy") {
+    hopfield::Network net{"data/test_matrix.txt"};
+    hopfield::Matrix w{2, 2, {0.0, 1.0, 1.0, 0.0}};
+    std::vector<int> pattern{1, -1};
+
+    SUBCASE("Known value") {
+      // E = -0.5*(w01*x0*x1 + w10*x1*x0) = -0.5*(1*1*-1 + 1*-1*1) = 1.0
+      CHECK(net.energy(pattern, w) == doctest::Approx(1.0));
+    }
+
+    SUBCASE("Energy is invariant under global sign flip") {
+      std::vector<int> flipped{-1, 1};
+      CHECK(net.energy(pattern, w) == doctest::Approx(net.energy(flipped, w)));
+    }
+  }
 }
