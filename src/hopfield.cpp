@@ -95,7 +95,7 @@ struct Matrix {
 class Network {
   std::vector<sf::Image> trainImgs_{};
   sf::Vector2u validSize_{0u, 0u};
-  std::string wMatrixFilePath_;
+  std::string wMatrixFilePath_{};
 
  public:
   /// @brief Contructs an empty hopfield neural network, only with the path of
@@ -278,4 +278,7 @@ TEST_CASE("MATRIX STRUCT") {
     CHECK_THROWS(m(0, 4));
     CHECK_THROWS(m(3, 4));
   }
+}
+
+TEST_CASE("HOPFIELD NETWORK"){
 }
