@@ -54,3 +54,4 @@ Thumbs.db
 docs/*.bcf
 docs/*.blg
 docs/*.run.xml
+docs/main.bbl
