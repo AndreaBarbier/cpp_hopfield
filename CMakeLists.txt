@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.28)
 project(progettopf VERSION 0.1.0)
 
+# definisce PROJECT_ROOT come macro utilizzabile in cpp
+add_compile_definitions(PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
+
 # abilita il supporto per i test, tra cui l'opzione BUILD_TESTING usata sotto
 include(CTest)
 

@@ -26,6 +26,26 @@ int sgn(T val) {
 }
 
 // ============================================================
+// GET THE DATA DIR
+// ============================================================
+
+/// @brief Returns the path to the project's data directory, creating it if it
+/// does not exist.
+/// @return A std::filesystem::path pointing to the "data" directory inside
+/// PROJECT_ROOT.
+/// @throws std::runtime_error If the path exists but is not a directory.
+std::filesystem::path getDataDir() {
+  auto data_dir{std::filesystem::path(PROJECT_ROOT) / "data"};
+  if (!std::filesystem::exists(data_dir)) {
+    std::filesystem::create_directories(data_dir);
+  } else if (!std::filesystem::is_directory(data_dir)) {
+    throw std::runtime_error("Error: " + data_dir.string() +
+                             "exists, but it is not a directory.");
+  }
+  return data_dir;
+}
+
+// ============================================================
 // WEIGHT MATRIX
 // ============================================================
 
@@ -89,16 +109,18 @@ struct Matrix {
 };
 
 // ============================================================
-// NEURLA NETWORK
+// NEURAL NETWORK
 // ============================================================
 
 /// @brief Hopfield neural network class
 class Network {
   std::vector<sf::Image> trainImgs_{};
   sf::Vector2u validSize_{0u, 0u};
-  std::string wMatrixFilePath_{"data/matrix.txt"};
+  std::filesystem::path wMatrixFilePath_{getDataDir() / "matrix.txt"};
 
  public:
+ Network() {}
+
   /// @brief Contructs an empty hopfield neural network, only with the path of
   /// the matrix storege file.
   /// @param[in] wMatrixFilePath Matrix storege file.
@@ -110,9 +132,6 @@ class Network {
   void addImage(sf::Image const& img) {
     auto size{img.getSize()};
     assert(size.x > 0u && size.y > 0u);
-    if (size.x == 0u || size.y == 0u) {
-      throw std::runtime_error("Error: invalid image.\n");
-    }
     trainImgs_.push_back(img);
   }
 
@@ -172,7 +191,7 @@ class Network {
     std::ofstream file{wMatrixFilePath_};
     if (!file.is_open()) {
       throw std::runtime_error("Error: impossible to open the file " +
-                               wMatrixFilePath_);
+                               wMatrixFilePath_.string());
     }
     for (size_t j{0}; j != N; ++j) {
       for (size_t i{j}; i != N; ++i) {
@@ -253,7 +272,7 @@ class Network {
     std::ifstream file{wMatrixFilePath_};
     if (!file.is_open()) {
       std::runtime_error("Error: impossible to open the file " +
-                         wMatrixFilePath_);
+                         wMatrixFilePath_.string());
     }
     for (size_t j{0}; j != N; ++j) {
       for (size_t i{0}; i != N; ++i) {
@@ -267,12 +286,14 @@ class Network {
 
     size_t id{0};
     while (newPattern != oldPattern) {
+      double sum{0.0};
       oldPattern.data = newPattern.data;
       for (size_t j{0}; j != N; ++j) {
         newPattern.data[j] = 0;
         for (size_t i{0}; i != N; ++i) {
-          newPattern.data[j] += sgn(w(j, i) * oldPattern.data[i]);
+          sum += w(j, i) * oldPattern.data[i];
         }
+        newPattern.data[j] = sgn(sum);
       }
       callback(newPattern, id);
       ++id;
@@ -343,5 +364,64 @@ TEST_CASE("HOPFIELD NETWORK") {
       std::vector<int> flipped{-1, 1};
       CHECK(net.energy(pattern, w) == doctest::Approx(net.energy(flipped, w)));
     }
+  }
+
+  // ============================================================
+  // NEW ADVANCED TESTS & EDGE CASES
+  // ============================================================
+
+  SUBCASE("Network::train with multiple small images and matrix inspection") {
+    hopfield::Network net{"data/multi_small_matrix.txt"};
+
+    // Creiamo 3 piccole immagini 2x2 con configurazioni diverse
+    sf::Image img1{};
+    img1.create(2, 2, sf::Color::White);
+
+    sf::Image img2{};
+    img2.create(2, 2, sf::Color::Black);
+
+    sf::Image img3{};
+    img3.create(
+        2, 2,
+        sf::Color::White);  // Duplicato o simile per testare il cumulo dei pesi
+
+    net.addImage(img1);
+    net.addImage(img2);
+    net.addImage(img3);
+
+    auto w = net.train();
+
+    // La dimensione della matrice deve essere N x N dove N = 2 * 2 = 4
+    CHECK(w.rows == 4);
+    CHECK(w.cols == 4);
+
+    // Proprietà fondamentali della matrice di Hopfield:
+    // 1. Diagonale principale rigorosamente a zero
+    // 2. Simmetria (w(i,j) == w(j,i))
+    for (size_t i{0}; i < w.rows; ++i) {
+      CHECK(w(i, i) == doctest::Approx(0.0));
+      for (size_t j{0}; j < w.cols; ++j) {
+        CHECK(w(i, j) == doctest::Approx(w(j, i)));
+        // Controllo che i pesi non contengano valori non validi (NaN o Inf)
+        CHECK_FALSE(std::isnan(w(i, j)));
+        CHECK_FALSE(std::isinf(w(i, j)));
+      }
+    }
+  }
+
+  SUBCASE("Network::train with mixed image sizes (automatic resizing)") {
+    hopfield::Network net{"data/mixed_sizes_matrix.txt"};
+
+    sf::Image imgSmall{};
+    imgSmall.create(2, 2, sf::Color::White);
+
+    sf::Image imgLarge{};
+    imgLarge.create(4, 4, sf::Color::Black);  // Dimensione diversa
+
+    net.addImage(imgSmall);
+    net.addImage(imgLarge);
+
+    // Il training DEVE completare con successo (grazie a resizeImages)
+    CHECK_NOTHROW(net.train());
   }
 }
