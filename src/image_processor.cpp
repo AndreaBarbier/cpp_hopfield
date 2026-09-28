@@ -146,4 +146,43 @@ sf::Image colorsToImage(PatternRGB const& inPattern) {
 sf::Image binaryToImage(PatternInt const& inPattern) {
   return colorsToImage(binaryToColors(inPattern));
 }
+
+sf::Image corruptImage(std::filesystem::path const& imgPath, double noiseRatio,
+                       unsigned int seed) {
+  if (!std::filesystem::is_regular_file(imgPath)) {
+    throw std::runtime_error("Error: " + imgPath.string() +
+                             " is not a valid file.\n");
+  }
+  if (noiseRatio < 0.0 || noiseRatio > 1.0) {
+    throw std::runtime_error("Error: noiseRatio must be in [0, 1].\n");
+  }
+
+  sf::Image img;
+  if (!img.loadFromFile(imgPath.string())) {
+    throw std::runtime_error("Error: impossible to load the image " +
+                             imgPath.string() + "\n");
+  }
+  if (!isValidImage(img)) {
+    throw std::runtime_error("Error: invalid image size.\n");
+  }
+
+  auto const size{img.getSize()};
+  size_t const total{static_cast<size_t>(size.x) * size.y};
+  size_t const nCorrupted{static_cast<size_t>(
+      std::llround(noiseRatio * static_cast<double>(total)))};
+
+  // Pick exactly nCorrupted distinct pixels
+  std::vector<size_t> indices(total);
+  std::iota(indices.begin(), indices.end(), size_t{0});
+  std::mt19937 gen{seed};
+  std::shuffle(indices.begin(), indices.end(), gen);
+
+  std::bernoulli_distribution whiteOrBlack{0.5};
+  for (size_t k{0}; k != nCorrupted; ++k) {
+    auto const x{static_cast<unsigned int>(indices[k] % size.x)};
+    auto const y{static_cast<unsigned int>(indices[k] / size.x)};
+    img.setPixel(x, y, whiteOrBlack(gen) ? sf::Color::White : sf::Color::Black);
+  }
+  return img;
+}
 }  // namespace hopfield

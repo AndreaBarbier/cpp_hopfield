@@ -35,6 +35,11 @@ int sgn(T val);
 /// @throws std::runtime_error If the path exists but is not a directory.
 std::filesystem::path getDataDir();
 
+struct Status {
+  double energy;
+  hopfield::PatternInt pattern;
+};
+
 // ============================================================
 // WEIGHT MATRIX
 // ============================================================
@@ -133,7 +138,7 @@ class Network {
   /// @note Uses assertions to ensure the network is not empty and that the
   /// weight matrix
   ///       dimensions match the size of the neuron vector.
-  double energy(std::vector<int> const& neuron, Matrix const& w);
+  double energy(PatternInt const& neuron, Matrix const& w) const;
 
   /// @brief Reconstructs a stored pattern from a partial or noisy input.
   /// @details Iteratively updates the pattern using the trained weight matrix
@@ -148,8 +153,8 @@ class Network {
   /// @throws std::runtime_error If the weight matrix file cannot be opened.
   PatternInt recall(
       PatternInt const& inPattern,
-      std::function<void(PatternInt const& newPattern, size_t id)> const&
-          callback = [](PatternInt const&, size_t) {}) const;
+      std::function<void(size_t id, PatternInt const& newPattern, double energy)> const&
+          callback = [](size_t id, PatternInt const& newPattern, double energy) {}) const;
 };
 }  // namespace hopfield
 

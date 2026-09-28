@@ -108,7 +108,7 @@ Matrix Network::train() {
       if (i == j) {
         w(j, i) = 0;
       } else {
-        for (auto pattern : binaryPatterns) {
+        for (auto const& pattern : binaryPatterns) {
           w(j, i) += static_cast<double>(pattern.data[i]) *
                      static_cast<double>(pattern.data[j]) /
                      static_cast<double>(N);
@@ -120,23 +120,24 @@ Matrix Network::train() {
 
   for (size_t j{0}; j != N; ++j) {
     for (size_t i{0}; i != N; ++i) {
-      file << w(j, i);
+      file << w(j, i) << ' ';
     }
+    file << '\n';
   }
   file.close();
   return w;
 }
 
-double Network::energy(std::vector<int> const& neuron, Matrix const& w) {
-  assert(!neuron.empty());
-  assert(neuron.size() == w.cols && neuron.size() == w.rows);
+double Network::energy(PatternInt const& neuron, Matrix const& w) const {
+  assert(!neuron.data.empty());
+  assert(neuron.data.size() == w.cols && neuron.data.size() == w.rows);
 
   double energy{0.0};
-  const size_t size = neuron.size();
+  const size_t size = neuron.data.size();
 
   for (size_t i{0}; i != size; ++i) {
     for (size_t j{0}; j != size; ++j) {
-      energy += -0.5 * w(i, j) * neuron[i] * neuron[j];
+      energy += -0.5 * w(i, j) * neuron.data[i] * neuron.data[j];
     }
   }
 
@@ -145,8 +146,8 @@ double Network::energy(std::vector<int> const& neuron, Matrix const& w) {
 
 PatternInt Network::recall(
     PatternInt const& inPattern,
-    std::function<void(PatternInt const& newPattern, size_t id)> const&
-        callback) const {
+    std::function<void(size_t id, PatternInt const& newPattern,
+                       double energy)> const& callback) const {
   if (validSize_ == sf::Vector2u{0u, 0u}) {
     throw std::runtime_error(
         "Error: the network has not been trained yet. "
@@ -173,16 +174,15 @@ PatternInt Network::recall(
 
   size_t id{0};
   while (newPattern != oldPattern) {
-    double sum{0.0};
     oldPattern.data = newPattern.data;
     for (size_t j{0}; j != N; ++j) {
-      newPattern.data[j] = 0;
+      double sum{0.0};
       for (size_t i{0}; i != N; ++i) {
         sum += w(j, i) * oldPattern.data[i];
       }
       newPattern.data[j] = sgn(sum);
     }
-    callback(newPattern, id);
+    callback(id, newPattern, energy(newPattern, w));
     ++id;
   }
 
