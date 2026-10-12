@@ -1,7 +1,9 @@
 #include <SFML/Graphics.hpp>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <map>
 #include <vector>
 
 #include "hopfield.hpp"
@@ -46,10 +48,12 @@ int main() {
     };
     auto pattern_right = net.recall(recallPatternInput, callback);
 
-    sf::Image{hopfield::binaryToImage(pattern_right)}.saveToFile(std::filesystem::path{"/home/abarbieri/docs/uni/t/y1/pf/cpp_hopfield/"
-                              "data/recall/batman_right.png"}); 
+    sf::Image{hopfield::binaryToImage(pattern_right)}.saveToFile(
+        std::filesystem::path{"/home/abarbieri/docs/uni/t/y1/pf/cpp_hopfield/"
+                              "data/recall/batman_right.png"});
 
   } catch (std::exception const& e) {
+    std::cerr << "Fatal error: " << e.what() << " \n";
     return EXIT_FAILURE;
   }
 }

@@ -15,7 +15,7 @@ std::filesystem::path getDataDir() {
     std::filesystem::create_directories(data_dir);
   } else if (!std::filesystem::is_directory(data_dir)) {
     throw std::runtime_error("Error: " + data_dir.string() +
-                             "exists, but it is not a directory.");
+                             " exists, but it is not a directory.");
   }
   return data_dir;
 }
@@ -68,7 +68,11 @@ void Network::addImages(std::vector<sf::Image> const& imgs) {
 }
 
 void Network::addImages(std::filesystem::path const& imgsPath) {
-  assert(std::filesystem::exists(imgsPath));
+  if (!std::filesystem::exists(imgsPath) ||
+      !std::filesystem::is_directory(imgsPath)) {
+    throw std::runtime_error("Error: " + imgsPath.string() +
+                             " does not exist or is not a directory");
+  }
   for (auto const& file : std::filesystem::directory_iterator{imgsPath}) {
     sf::Image img{};
     img.loadFromFile(file.path());
