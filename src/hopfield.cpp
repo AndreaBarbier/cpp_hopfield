@@ -170,7 +170,10 @@ PatternInt Network::recall(
 
   PatternInt current{inPattern};
   size_t id{0};
+  callback(current, id, energy(current, w));
+
   bool changed{true};
+
   while (changed) {
     changed = false;
     for (size_t i{0}; i != N; ++i) {
@@ -178,15 +181,15 @@ PatternInt Network::recall(
       for (size_t j{0}; j != N; ++j) {
         sum += w(i, j) * current.data[j];
       }
+
       int const s{(sum > 0.0) ? 1 : ((sum < 0.0) ? -1 : current.data[i])};
+
       if (current.data[i] != s) {
         current.data[i] = s;
         changed = true;
+        callback(current, id, energy(current, w));
+        ++id;
       }
-    }
-    if (changed) {
-      callback(current, id, energy(current, w));
-      ++id;
     }
   }
   return current;
