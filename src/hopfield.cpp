@@ -120,23 +120,24 @@ Matrix Network::train() {
 
   for (size_t j{0}; j != N; ++j) {
     for (size_t i{0}; i != N; ++i) {
-      file << w(j, i);
+      file << w(j, i) << '\t';
     }
+    file << '\n';
   }
   file.close();
   return w;
 }
 
-double Network::energy(std::vector<int> const& neuron, Matrix const& w) {
-  assert(!neuron.empty());
-  assert(neuron.size() == w.cols && neuron.size() == w.rows);
+double Network::energy(PatternInt const& neuron, Matrix const& w) const {
+  assert(!neuron.data.empty());
+  assert(neuron.data.size() == w.cols && neuron.data.size() == w.rows);
 
   double energy{0.0};
-  const size_t size = neuron.size();
+  const size_t size = neuron.data.size();
 
   for (size_t i{0}; i != size; ++i) {
     for (size_t j{0}; j != size; ++j) {
-      energy += -0.5 * w(i, j) * neuron[i] * neuron[j];
+      energy += -0.5 * w(i, j) * neuron.data[i] * neuron.data[j];
     }
   }
 
@@ -145,8 +146,8 @@ double Network::energy(std::vector<int> const& neuron, Matrix const& w) {
 
 PatternInt Network::recall(
     PatternInt const& inPattern,
-    std::function<void(PatternInt const& newPattern, size_t id)> const&
-        callback) const {
+    std::function<void(PatternInt const& newPattern, size_t id,
+                       double energy)> const& callback) const {
   if (validSize_ == sf::Vector2u{0u, 0u}) {
     throw std::runtime_error(
         "Error: the network has not been trained yet. "
@@ -167,26 +168,27 @@ PatternInt Network::recall(
     }
   }
 
-  PatternInt oldPattern{};
-  PatternInt newPattern{inPattern};
-  oldPattern.size = inPattern.size;
-
+  PatternInt current{inPattern};
   size_t id{0};
-  while (newPattern != oldPattern) {
-    double sum{0.0};
-    oldPattern.data = newPattern.data;
-    for (size_t j{0}; j != N; ++j) {
-      newPattern.data[j] = 0;
-      for (size_t i{0}; i != N; ++i) {
-        sum += w(j, i) * oldPattern.data[i];
+  bool changed{true};
+  while (changed) {
+    changed = false;
+    for (size_t i{0}; i != N; ++i) {
+      double sum{0.0};
+      for (size_t j{0}; j != N; ++j) {
+        sum += w(i, j) * current.data[j];
       }
-      newPattern.data[j] = sgn(sum);
+      int const s{(sum > 0.0) ? 1 : ((sum < 0.0) ? -1 : current.data[i])};
+      if (current.data[i] != s) {
+        current.data[i] = s;
+        changed = true;
+      }
     }
-    callback(newPattern, id);
-    ++id;
+    if (changed) {
+      callback(current, id, energy(current, w));
+      ++id;
+    }
   }
-
-  file.close();
-  return newPattern;
+  return current;
 }
 }  // namespace hopfield
