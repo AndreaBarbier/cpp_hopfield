@@ -16,13 +16,12 @@ int main() {
     net.train();
 
     sf::Image noisy{hopfield::corruptImage(
-        std::filesystem::path{"/home/abarbieri/docs/uni/t/y1/pf/cpp_hopfield/"
-                              "data/train/icons8-batman-48.png"},
-        0.07)};
+        std::filesystem::path{hopfield::getDataDir() /
+                              "train/icons8-spongebob-squarepants-48.png"},
+        0.30)};
 
     noisy.saveToFile(
-        std::filesystem::path{"/home/abarbieri/docs/uni/t/y1/pf/cpp_hopfield/"
-                              "data/recall/batman.png"});
+        std::filesystem::path{hopfield::getDataDir() / "recall/spongebob.png"});
     // std::filesystem::path recallImgPath;
     // std::cout << "Insert the absolute path of the corrupt image: ";
     // std::cin >> recallImgPath;
@@ -49,11 +48,18 @@ int main() {
     auto pattern_right = net.recall(recallPatternInput, callback);
 
     sf::Image{hopfield::binaryToImage(pattern_right)}.saveToFile(
+<<<<<<< HEAD
         std::filesystem::path{"/home/abarbieri/docs/uni/t/y1/pf/cpp_hopfield/"
                               "data/recall/batman_right.png"});
 
   } catch (std::exception const& e) {
     std::cerr << "Fatal error: " << e.what() << " \n";
+=======
+        std::filesystem::path{hopfield::getDataDir() / "recall/spongebob-right.png"});
+
+  } catch (std::exception const& e) {
+    std::cerr << e.what() << '\n';
+>>>>>>> 5167fd5 (main minimal added)
     return EXIT_FAILURE;
   }
 }

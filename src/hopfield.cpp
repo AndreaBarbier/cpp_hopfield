@@ -4,11 +4,6 @@
 
 namespace hopfield {
 
-template <class T>
-int sgn(T val) {
-  return ((T{0} < val) - (T{0} > val));
-}
-
 std::filesystem::path getDataDir() {
   auto data_dir{std::filesystem::path(PROJECT_ROOT) / "data"};
   if (!std::filesystem::exists(data_dir)) {
@@ -157,9 +152,13 @@ PatternInt Network::recall(
         "Error: the network has not been trained yet. "
         "Please call train() before recall().\n");
   }
-  assert(inPattern.size == validSize_);
+  if (inPattern.size != validSize_ ||
+      inPattern.data.size() != static_cast<size_t>(validSize_.x) * validSize_.y) {
+    throw std::runtime_error(
+        "Error: the input pattern size does not match the network size.\n");
+  }
 
-  size_t const N{validSize_.x * validSize_.y};
+  size_t const N{static_cast<size_t>(validSize_.x) * validSize_.y};
   Matrix w{N, N};
   std::ifstream file{wMatrixFilePath_};
   if (!file.is_open()) {
@@ -168,29 +167,37 @@ PatternInt Network::recall(
   }
   for (size_t j{0}; j != N; ++j) {
     for (size_t i{0}; i != N; ++i) {
-      file >> w(j, i);
+      if (!(file >> w(j, i))) {
+        throw std::runtime_error("Error: the weight matrix file is corrupted "
+                                 "or too short.\n");
+      }
     }
   }
 
-  PatternInt oldPattern{};
   PatternInt newPattern{inPattern};
-  oldPattern.size = inPattern.size;
 
   size_t id{0};
-  while (newPattern != oldPattern) {
-    oldPattern.data = newPattern.data;
+  callback(id++, newPattern, energy(newPattern, w));  // stato iniziale
+
+  bool changed{true};
+  while (changed) {
+    changed = false;
     for (size_t j{0}; j != N; ++j) {
       double sum{0.0};
       for (size_t i{0}; i != N; ++i) {
-        sum += w(j, i) * oldPattern.data[i];
+        sum += w(j, i) * newPattern.data[i];
       }
-      newPattern.data[j] = sgn(sum);
+      int const s{sum > 0.0 ? 1 : (sum < 0.0 ? -1 : newPattern.data[j])};
+      if (s != newPattern.data[j]) {
+        newPattern.data[j] = s;
+        changed = true;
+      }
     }
-    callback(id, newPattern, energy(newPattern, w));
-    ++id;
+    if (changed) {
+      callback(id++, newPattern, energy(newPattern, w));
+    }
   }
 
-  file.close();
   return newPattern;
 }
 }  // namespace hopfield
