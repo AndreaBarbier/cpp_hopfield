@@ -14,17 +14,6 @@
 
 namespace hopfield {
 // ============================================================
-// SIGN FUNCTION
-// ============================================================
-
-/// @brief Returns the sign of a value
-/// @tparam T Numeric type
-/// @param[in] val The value to evaluate
-/// @return Returns 1 if val > 0, -1 if val < 0, 0 if val == 0
-template <class T>
-int sgn(T val);
-
-// ============================================================
 // GET THE DATA DIR
 // ============================================================
 

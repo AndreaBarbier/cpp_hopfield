@@ -4,11 +4,6 @@
 
 namespace hopfield {
 
-template <class T>
-int sgn(T val) {
-  return ((T{0} < val) - (T{0} > val));
-}
-
 std::filesystem::path getDataDir() {
   auto data_dir{std::filesystem::path(PROJECT_ROOT) / "data"};
   if (!std::filesystem::exists(data_dir)) {
@@ -108,7 +103,7 @@ Matrix Network::train() {
       if (i == j) {
         w(j, i) = 0;
       } else {
-        for (auto pattern : binaryPatterns) {
+        for (auto const& pattern : binaryPatterns) {
           w(j, i) += static_cast<double>(pattern.data[i]) *
                      static_cast<double>(pattern.data[j]) /
                      static_cast<double>(N);
@@ -153,7 +148,12 @@ PatternInt Network::recall(
         "Error: the network has not been trained yet. "
         "Please call train() before recall().\n");
   }
-  assert(inPattern.size == validSize_);
+  if (inPattern.size != validSize_ ||
+      inPattern.data.size() !=
+          static_cast<size_t>(validSize_.x) * validSize_.y) {
+    throw std::runtime_error(
+        "Error: the input pattern size does not match the network size.\n");
+  }
 
   size_t const N{validSize_.x * validSize_.y};
   Matrix w{N, N};
@@ -170,10 +170,12 @@ PatternInt Network::recall(
 
   PatternInt current{inPattern};
   size_t id{0};
+  // Callback called at the initial state
   callback(current, id, energy(current, w));
 
   bool changed{true};
 
+  // If at least one neuron changes, the loop has to continue
   while (changed) {
     changed = false;
     for (size_t i{0}; i != N; ++i) {
