@@ -47,6 +47,22 @@ double const& Matrix::operator()(size_t i, size_t j) const {
   return matrix[i * cols + j];
 }
 
+double energy(PatternInt const& neuron, Matrix const& w) {
+  assert(!neuron.data.empty());
+  assert(neuron.data.size() == w.cols && neuron.data.size() == w.rows);
+
+  double energy{0.0};
+  const size_t size = neuron.data.size();
+
+  for (size_t i{0}; i != size; ++i) {
+    for (size_t j{0}; j != size; ++j) {
+      energy += -0.5 * w(i, j) * neuron.data[i] * neuron.data[j];
+    }
+  }
+
+  return energy;
+}
+
 Network::Network(std::string const& wMatrixFilePath)
     : wMatrixFilePath_(wMatrixFilePath) {}
 
@@ -124,22 +140,6 @@ Matrix Network::train() {
   }
   file.close();
   return w;
-}
-
-double Network::energy(PatternInt const& neuron, Matrix const& w) const {
-  assert(!neuron.data.empty());
-  assert(neuron.data.size() == w.cols && neuron.data.size() == w.rows);
-
-  double energy{0.0};
-  const size_t size = neuron.data.size();
-
-  for (size_t i{0}; i != size; ++i) {
-    for (size_t j{0}; j != size; ++j) {
-      energy += -0.5 * w(i, j) * neuron.data[i] * neuron.data[j];
-    }
-  }
-
-  return energy;
 }
 
 PatternInt Network::recall(

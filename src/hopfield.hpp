@@ -69,6 +69,20 @@ struct Matrix {
 // NEURAL NETWORK
 // ============================================================
 
+/// @brief Calculates the total energy of the actua state.
+///
+/// This function evaluates the energy state of a network (e.g., Hopfield
+/// network) using the state vector of the neurons and the weight matrix.
+///
+/// @param neuron A constant reference to a vector of integers representing
+/// the neuron states.
+/// @param w A constant reference to the weight matrix of the network.
+/// @return The calculated double-precision energy value of the network.
+/// @note Uses assertions to ensure the network is not empty and that the
+/// weight matrix
+///       dimensions match the size of the neuron vector.
+double energy(PatternInt const& neuron, Matrix const& w);
+
 /// @brief Hopfield neural network class
 class Network {
   std::vector<sf::Image> trainImgs_{};
@@ -108,20 +122,6 @@ class Network {
   /// @throws std::runtime_error If the weight matrix file cannot be opened.
   /// @note Call addImage() at least once before invoking this function.
   Matrix train();
-
-  /// @brief Calculates the total energy of the neuronal network.
-  ///
-  /// This function evaluates the energy state of a network (e.g., Hopfield
-  /// network) using the state vector of the neurons and the weight matrix.
-  ///
-  /// @param neuron A constant reference to a vector of integers representing
-  /// the neuron states.
-  /// @param w A constant reference to the weight matrix of the network.
-  /// @return The calculated double-precision energy value of the network.
-  /// @note Uses assertions to ensure the network is not empty and that the
-  /// weight matrix
-  ///       dimensions match the size of the neuron vector.
-  double energy(PatternInt const& neuron, Matrix const& w) const;
 
   /// @brief Reconstructs a stored pattern from a partial or noisy input.
   /// @details Iteratively updates the pattern using the trained weight matrix
