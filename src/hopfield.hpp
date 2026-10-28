@@ -72,7 +72,6 @@ struct Matrix {
 /// @brief Hopfield neural network class
 class Network {
   std::vector<sf::Image> trainImgs_{};
-  sf::Vector2u validSize_{0u, 0u};
   std::filesystem::path wMatrixFilePath_{getDataDir() / "matrix.txt"};
 
  public:
@@ -136,10 +135,10 @@ class Network {
   /// @throws std::runtime_error If the network has not been trained yet.
   /// @throws std::runtime_error If the weight matrix file cannot be opened.
   PatternInt recall(
-      PatternInt const& inPattern,
+      PatternInt const& inPattern, size_t maxSweep = 1000,
       std::function<void(PatternInt const& newPattern, size_t id,
-                         double energy)> const& callback = [](PatternInt const&,
-                                                              size_t) {}) const;
+                         double energy)> const& callback =
+          [](PatternInt const&, size_t, double) {}) const;
 };
 }  // namespace hopfield
 
