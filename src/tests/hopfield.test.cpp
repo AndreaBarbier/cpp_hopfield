@@ -2,7 +2,9 @@
 #include "../hopfield.hpp"
 
 #include <SFML/Graphics.hpp>
+#include <cmath>
 #include <filesystem>
+#include <vector>
 
 #include "doctest.h"
 
@@ -29,7 +31,8 @@ TEST_CASE("MATRIX STRUCT") {
 
 TEST_CASE("HOPFIELD NETWORK") {
   SUBCASE("Network::train") {
-    hopfield::Network net{"data/test_matrix.txt"};
+    hopfield::Network net{
+        (hopfield::getDataDir() / "test_matrix.txt").string()};
 
     SUBCASE("Empty dataset throws") {
       CHECK_THROWS_AS(net.train(), std::runtime_error);
@@ -106,31 +109,35 @@ TEST_CASE("HOPFIELD NETWORK") {
     }
   }
 
-  SUBCASE("Network::energy") {
-    hopfield::Network net{"data/test_matrix.txt"};
+  SUBCASE("energy") {
+    // energy() is a free function in the hopfield namespace
     hopfield::Matrix w{2, 2, {0.0, 1.0, 1.0, 0.0}};
-    std::vector<int> pattern{1, -1};
+    hopfield::PatternInt pattern{{1, -1}, sf::Vector2u{2u, 1u}};
 
     SUBCASE("Known value") {
       // E = -0.5*(w01*x0*x1 + w10*x1*x0) = -0.5*(1*1*-1 + 1*-1*1) = 1.0
-      CHECK(net.energy(pattern, w) == doctest::Approx(1.0));
+      CHECK(hopfield::energy(pattern, w) == doctest::Approx(1.0));
     }
 
     SUBCASE("Energy is invariant under global sign flip") {
-      std::vector<int> flipped{-1, 1};
-      CHECK(net.energy(pattern, w) == doctest::Approx(net.energy(flipped, w)));
+      hopfield::PatternInt flipped{{-1, 1}, sf::Vector2u{2u, 1u}};
+      CHECK(hopfield::energy(pattern, w) ==
+            doctest::Approx(hopfield::energy(flipped, w)));
     }
 
     SUBCASE("Energy with zero matrix is zero") {
       hopfield::Matrix zero{2, 2};
-      CHECK(net.energy(pattern, zero) == doctest::Approx(0.0));
+      CHECK(hopfield::energy(pattern, zero) == doctest::Approx(0.0));
     }
   }
 
   SUBCASE("Network::recall") {
-    hopfield::Network net{"data/recall_matrix.txt"};
+    auto const matrixPath{hopfield::getDataDir() / "recall_matrix.txt"};
+    hopfield::Network net{matrixPath.string()};
 
     SUBCASE("Recall before train throws") {
+      // make sure no matrix file is left over from previous runs
+      std::filesystem::remove(matrixPath);
       hopfield::PatternInt p{};
       p.size = sf::Vector2u{2u, 2u};
       p.data = std::vector<int>(4, 1);
@@ -163,9 +170,10 @@ TEST_CASE("HOPFIELD NETWORK") {
       noisy.data[0] = -noisy.data[0];  // introduce un errore
 
       std::vector<double> energies;
-      net.recall(noisy, [&](hopfield::PatternInt const& p, size_t) {
-        energies.push_back(net.energy(p.data, w));
-      });
+      net.recall(noisy, 1000,
+                 [&](hopfield::PatternInt const& p, size_t, double) {
+                   energies.push_back(hopfield::energy(p, w));
+                 });
 
       REQUIRE(!energies.empty());
       for (size_t k{1}; k < energies.size(); ++k) {
@@ -187,7 +195,8 @@ TEST_CASE("HOPFIELD NETWORK") {
       img1.saveToFile((tmpDir / "img1.png").string());
       img2.saveToFile((tmpDir / "img2.png").string());
 
-      hopfield::Network net{"data/dir_matrix.txt"};
+      hopfield::Network net{
+          (hopfield::getDataDir() / "dir_matrix.txt").string()};
       net.addImages(tmpDir);
       auto w = net.train();
 
