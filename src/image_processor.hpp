@@ -6,9 +6,6 @@
 #include <cassert>
 #include <stdexcept>
 #include <vector>
-#include <random>
-#include <numeric>
-#include <filesystem>
 
 /// @file ImageProcessor.hpp
 /// @brief Utilities for loading and processing images into patterns
@@ -130,9 +127,6 @@ sf::Image colorsToImage(PatternRGB const& inPattern);
 /// @param[in] inPattern PatternInt to convert
 /// @return Returns an image in grey scale
 sf::Image binaryToImage(PatternInt const& inPattern);
-
-sf::Image corruptImage(std::filesystem::path const& imgPath, double noiseRatio,
-                       unsigned int seed = std::random_device{}());
 }  // namespace hopfield
 
 #endif

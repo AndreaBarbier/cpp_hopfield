@@ -24,11 +24,6 @@ namespace hopfield {
 /// @throws std::runtime_error If the path exists but is not a directory.
 std::filesystem::path getDataDir();
 
-struct Status {
-  double energy;
-  hopfield::PatternInt pattern;
-};
-
 // ============================================================
 // WEIGHT MATRIX
 // ============================================================
