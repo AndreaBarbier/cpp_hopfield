@@ -74,10 +74,23 @@ struct Matrix {
 // NEURAL NETWORK
 // ============================================================
 
+/// @brief Calculates the total energy of the actua state.
+///
+/// This function evaluates the energy state of a network (e.g., Hopfield
+/// network) using the state vector of the neurons and the weight matrix.
+///
+/// @param neuron A constant reference to a vector of integers representing
+/// the neuron states.
+/// @param w A constant reference to the weight matrix of the network.
+/// @return The calculated double-precision energy value of the network.
+/// @note Uses assertions to ensure the network is not empty and that the
+/// weight matrix
+///       dimensions match the size of the neuron vector.
+double energy(PatternInt const& neuron, Matrix const& w);
+
 /// @brief Hopfield neural network class
 class Network {
   std::vector<sf::Image> trainImgs_{};
-  sf::Vector2u validSize_{0u, 0u};
   std::filesystem::path wMatrixFilePath_{getDataDir() / "matrix.txt"};
 
  public:
@@ -115,20 +128,6 @@ class Network {
   /// @note Call addImage() at least once before invoking this function.
   Matrix train();
 
-  /// @brief Calculates the total energy of the neuronal network.
-  ///
-  /// This function evaluates the energy state of a network (e.g., Hopfield
-  /// network) using the state vector of the neurons and the weight matrix.
-  ///
-  /// @param neuron A constant reference to a vector of integers representing
-  /// the neuron states.
-  /// @param w A constant reference to the weight matrix of the network.
-  /// @return The calculated double-precision energy value of the network.
-  /// @note Uses assertions to ensure the network is not empty and that the
-  /// weight matrix
-  ///       dimensions match the size of the neuron vector.
-  double energy(PatternInt const& neuron, Matrix const& w) const;
-
   /// @brief Reconstructs a stored pattern from a partial or noisy input.
   /// @details Iteratively updates the pattern using the trained weight matrix
   ///          until convergence, following the Hopfield network dynamics.
@@ -141,9 +140,10 @@ class Network {
   /// @throws std::runtime_error If the network has not been trained yet.
   /// @throws std::runtime_error If the weight matrix file cannot be opened.
   PatternInt recall(
-      PatternInt const& inPattern,
-      std::function<void(size_t id, PatternInt const& newPattern, double energy)> const&
-          callback = [](size_t id, PatternInt const& newPattern, double energy) {}) const;
+      PatternInt const& inPattern, size_t maxSweep = 1000,
+      std::function<void(PatternInt const& newPattern, size_t id,
+                         double energy)> const& callback =
+          [](PatternInt const&, size_t, double) {}) const;
 };
 }  // namespace hopfield
 

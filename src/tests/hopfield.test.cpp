@@ -2,7 +2,9 @@
 #include "../hopfield.hpp"
 
 #include <SFML/Graphics.hpp>
+#include <cmath>
 #include <filesystem>
+#include <vector>
 
 #include "doctest.h"
 
@@ -28,35 +30,181 @@ TEST_CASE("MATRIX STRUCT") {
 }
 
 TEST_CASE("HOPFIELD NETWORK") {
-  const sf::Color R = sf::Color::Red;
-  const sf::Color G = sf::Color::Green;
-  const sf::Color B = sf::Color::Blue;
-  const sf::Color W = sf::Color::White;
-  const sf::Color K = sf::Color::Black;
+  SUBCASE("Network::train") {
+    hopfield::Network net{
+        (hopfield::getDataDir() / "test_matrix.txt").string()};
 
-  // a1: 2x2   R G
-  //           B W
-  sf::Image a1;
-  a1.create(2, 2, K);
-  {
-    std::vector<sf::Color> px{R, G, B, W};
-    for (auto y{0u}; y != 2; ++y) {
-      for (auto x{0u}; x != 2; ++x) {
-        a1.setPixel(x, y, px[y * 2 + x]);
+    SUBCASE("Empty dataset throws") {
+      CHECK_THROWS_AS(net.train(), std::runtime_error);
+    }
+
+    SUBCASE("Weight matrix is symmetric with zero diagonal") {
+      sf::Image img1{};
+      img1.create(2, 2, sf::Color::White);
+      sf::Image img2{};
+      img2.create(2, 2, sf::Color::Black);
+      net.addImage(img1);
+      net.addImage(img2);
+      auto w = net.train();
+      for (size_t i = 0; i < w.rows; ++i) {
+        CHECK(w(i, i) == doctest::Approx(0.0));
+        for (size_t j = 0; j < w.cols; ++j) {
+          CHECK(w(i, j) == doctest::Approx(w(j, i)));
+        }
+      }
+    }
+
+    SUBCASE("Weight matrix values match hand-computed result") {
+      sf::Image img1{};
+      img1.create(2, 2, sf::Color::White);
+      sf::Image img2{};
+      img2.create(2, 2, sf::Color::Black);
+      net.addImage(img1);
+      net.addImage(img2);
+      auto w = net.train();
+      for (size_t i{0}; i < w.rows; ++i) {
+        for (size_t j{0}; j < w.cols; ++j) {
+          if (i == j) continue;
+          CHECK(w(i, j) == doctest::Approx(0.5));
+        }
+      }
+    }
+
+    SUBCASE("Multiple small images and matrix inspection") {
+      sf::Image img1{};
+      img1.create(2, 2, sf::Color::White);
+      sf::Image img2{};
+      img2.create(2, 2, sf::Color::Black);
+      sf::Image img3{};
+      img3.create(2, 2, sf::Color::White);
+
+      net.addImage(img1);
+      net.addImage(img2);
+      net.addImage(img3);
+
+      auto w = net.train();
+
+      CHECK(w.rows == 4);
+      CHECK(w.cols == 4);
+      for (size_t i{0}; i < w.rows; ++i) {
+        CHECK(w(i, i) == doctest::Approx(0.0));
+        for (size_t j{0}; j < w.cols; ++j) {
+          CHECK(w(i, j) == doctest::Approx(w(j, i)));
+          CHECK_FALSE(std::isnan(w(i, j)));
+          CHECK_FALSE(std::isinf(w(i, j)));
+        }
+      }
+    }
+
+    SUBCASE("Mixed image sizes (automatic resizing)") {
+      sf::Image imgSmall{};
+      imgSmall.create(2, 2, sf::Color::White);
+      sf::Image imgLarge{};
+      imgLarge.create(4, 4, sf::Color::Black);
+
+      net.addImage(imgSmall);
+      net.addImage(imgLarge);
+
+      CHECK_NOTHROW(net.train());
+    }
+  }
+
+  SUBCASE("energy") {
+    // energy() is a free function in the hopfield namespace
+    hopfield::Matrix w{2, 2, {0.0, 1.0, 1.0, 0.0}};
+    hopfield::PatternInt pattern{{1, -1}, sf::Vector2u{2u, 1u}};
+
+    SUBCASE("Known value") {
+      // E = -0.5*(w01*x0*x1 + w10*x1*x0) = -0.5*(1*1*-1 + 1*-1*1) = 1.0
+      CHECK(hopfield::energy(pattern, w) == doctest::Approx(1.0));
+    }
+
+    SUBCASE("Energy is invariant under global sign flip") {
+      hopfield::PatternInt flipped{{-1, 1}, sf::Vector2u{2u, 1u}};
+      CHECK(hopfield::energy(pattern, w) ==
+            doctest::Approx(hopfield::energy(flipped, w)));
+    }
+
+    SUBCASE("Energy with zero matrix is zero") {
+      hopfield::Matrix zero{2, 2};
+      CHECK(hopfield::energy(pattern, zero) == doctest::Approx(0.0));
+    }
+  }
+
+  SUBCASE("Network::recall") {
+    auto const matrixPath{hopfield::getDataDir() / "recall_matrix.txt"};
+    hopfield::Network net{matrixPath.string()};
+
+    SUBCASE("Recall before train throws") {
+      // make sure no matrix file is left over from previous runs
+      std::filesystem::remove(matrixPath);
+      hopfield::PatternInt p{};
+      p.size = sf::Vector2u{2u, 2u};
+      p.data = std::vector<int>(4, 1);
+      CHECK_THROWS_AS(net.recall(p), std::runtime_error);
+    }
+
+    SUBCASE("A stored pattern is stable under recall") {
+      sf::Image img{};
+      img.create(2, 2, sf::Color::White);
+      net.addImage(img);
+      net.train();
+
+      auto stored = hopfield::imageToBinary(img);
+      auto result = net.recall(stored);
+
+      REQUIRE(result.size == stored.size);
+      CHECK(result.data == stored.data);
+    }
+
+    SUBCASE("Energy is non-increasing along recall trajectory") {
+      sf::Image img1{};
+      img1.create(2, 2, sf::Color::White);
+      sf::Image img2{};
+      img2.create(2, 2, sf::Color::Black);
+      net.addImage(img1);
+      net.addImage(img2);
+      auto w = net.train();
+
+      auto noisy = hopfield::imageToBinary(img1);
+      noisy.data[0] = -noisy.data[0];  // introduce un errore
+
+      std::vector<double> energies;
+      net.recall(noisy, 1000,
+                 [&](hopfield::PatternInt const& p, size_t, double) {
+                   energies.push_back(hopfield::energy(p, w));
+                 });
+
+      REQUIRE(!energies.empty());
+      for (size_t k{1}; k < energies.size(); ++k) {
+        CHECK(energies[k] <= energies[k - 1] + 1e-9);
       }
     }
   }
 
-  // a2: 2x2   K K
-  //           K W
-  sf::Image a2;
-  a2.create(2, 2, K);
-  {
-    std::vector<sf::Color> px{K, K, K, W};
-    for (auto y{0u}; y != 2; ++y) {
-      for (auto x{0u}; x != 2; ++x) {
-        a2.setPixel(x, y, px[y * 2 + x]);
-      }
+  SUBCASE("Network::addImages") {
+    SUBCASE("addImages from a directory loads every valid file") {
+      auto tmpDir =
+          std::filesystem::temp_directory_path() / "hopfield_test_imgs";
+      std::filesystem::create_directories(tmpDir);
+
+      sf::Image img1{};
+      img1.create(2, 2, sf::Color::White);
+      sf::Image img2{};
+      img2.create(2, 2, sf::Color::Black);
+      img1.saveToFile((tmpDir / "img1.png").string());
+      img2.saveToFile((tmpDir / "img2.png").string());
+
+      hopfield::Network net{
+          (hopfield::getDataDir() / "dir_matrix.txt").string()};
+      net.addImages(tmpDir);
+      auto w = net.train();
+
+      // 2 immagini caricate, entrambe 2x2 -> N = 4
+      CHECK(w.rows == 4);
+      CHECK(w.cols == 4);
+
+      std::filesystem::remove_all(tmpDir);
     }
   }
 

@@ -47,6 +47,22 @@ double const& Matrix::operator()(size_t i, size_t j) const {
   return matrix[i * cols + j];
 }
 
+double energy(PatternInt const& neuron, Matrix const& w) {
+  assert(!neuron.data.empty());
+  assert(neuron.data.size() == w.cols && neuron.data.size() == w.rows);
+
+  double energy{0.0};
+  const size_t size = neuron.data.size();
+
+  for (size_t i{0}; i != size; ++i) {
+    for (size_t j{0}; j != size; ++j) {
+      energy += -0.5 * w(i, j) * neuron.data[i] * neuron.data[j];
+    }
+  }
+
+  return energy;
+}
+
 Network::Network(std::string const& wMatrixFilePath)
     : wMatrixFilePath_(wMatrixFilePath) {}
 
@@ -57,7 +73,7 @@ void Network::addImage(sf::Image const& img) {
 }
 
 void Network::addImages(std::vector<sf::Image> const& imgs) {
-  for (auto img : imgs) {
+  for (auto const& img : imgs) {
     addImage(img);
   }
 }
@@ -82,18 +98,18 @@ Matrix Network::train() {
         "addImages() before train().\n");
   }
   auto resizedImgs{resizeImages(validateImages(trainImgs_))};
-  if (trainImgs_.empty()) {
+  if (resizedImgs.empty()) {
     throw std::runtime_error(
         "Error: invalid training dataset. Every image had an invalid "
         "size.\n");
   }
-  validSize_ = {resizedImgs[0].getSize()};
+  sf::Vector2u validSize = {resizedImgs[0].getSize()};
   for (auto const& img : resizedImgs) {
     assert(img.getSize().x != 0u);
     assert(img.getSize().y != 0u);
-    assert(img.getSize() == validSize_);
+    assert(img.getSize() == validSize);
   }
-  size_t const N{validSize_.x * validSize_.y};
+  size_t const N{validSize.x * validSize.y};
   std::vector<PatternInt> binaryPatterns{imageToBinaries(resizedImgs)};
 
   Matrix w{N, N};
@@ -102,6 +118,9 @@ Matrix Network::train() {
     throw std::runtime_error("Error: impossible to open the file " +
                              wMatrixFilePath_.string());
   }
+
+  file << validSize.x << ' ' << validSize.y << '\n';
+
   for (size_t j{0}; j != N; ++j) {
     for (size_t i{j}; i != N; ++i) {
       if (i == j) {
@@ -119,7 +138,7 @@ Matrix Network::train() {
 
   for (size_t j{0}; j != N; ++j) {
     for (size_t i{0}; i != N; ++i) {
-      file << w(j, i) << ' ';
+      file << w(j, i) << '\t';
     }
     file << '\n';
   }
@@ -127,77 +146,63 @@ Matrix Network::train() {
   return w;
 }
 
-double Network::energy(PatternInt const& neuron, Matrix const& w) const {
-  assert(!neuron.data.empty());
-  assert(neuron.data.size() == w.cols && neuron.data.size() == w.rows);
-
-  double energy{0.0};
-  const size_t size = neuron.data.size();
-
-  for (size_t i{0}; i != size; ++i) {
-    for (size_t j{0}; j != size; ++j) {
-      energy += -0.5 * w(i, j) * neuron.data[i] * neuron.data[j];
-    }
-  }
-
-  return energy;
-}
-
 PatternInt Network::recall(
-    PatternInt const& inPattern,
-    std::function<void(size_t id, PatternInt const& newPattern,
+    PatternInt const& inPattern, size_t maxSweep,
+    std::function<void(PatternInt const& newPattern, size_t id,
                        double energy)> const& callback) const {
-  if (validSize_ == sf::Vector2u{0u, 0u}) {
-    throw std::runtime_error(
-        "Error: the network has not been trained yet. "
-        "Please call train() before recall().\n");
-  }
-  if (inPattern.size != validSize_ ||
-      inPattern.data.size() != static_cast<size_t>(validSize_.x) * validSize_.y) {
-    throw std::runtime_error(
-        "Error: the input pattern size does not match the network size.\n");
-  }
-
-  size_t const N{static_cast<size_t>(validSize_.x) * validSize_.y};
-  Matrix w{N, N};
   std::ifstream file{wMatrixFilePath_};
   if (!file.is_open()) {
     throw std::runtime_error("Error: impossible to open the file " +
                              wMatrixFilePath_.string());
   }
+  sf::Vector2u validSize{0u, 0u};
+  if (!(file >> validSize.x >> validSize.y) || validSize.x == 0u ||
+      validSize.y == 0u) {
+    throw std::runtime_error("Error: invalid weight matrix file header.\n");
+  }
+  size_t const N{static_cast<size_t>(validSize.x) * validSize.y};
+  if (inPattern.size != validSize || inPattern.data.size() != N) {
+    throw std::runtime_error(
+        "Error: the input pattern size does not match the network size.\n");
+  }
+
+  Matrix w{N, N};
+
   for (size_t j{0}; j != N; ++j) {
     for (size_t i{0}; i != N; ++i) {
       if (!(file >> w(j, i))) {
-        throw std::runtime_error("Error: the weight matrix file is corrupted "
-                                 "or too short.\n");
+        throw std::runtime_error(
+            "Error: the weight matrix file is corrupted or too short.\n");
       }
     }
   }
 
-  PatternInt newPattern{inPattern};
-
+  PatternInt current{inPattern};
   size_t id{0};
-  callback(id++, newPattern, energy(newPattern, w));  // stato iniziale
+  callback(current, id++, energy(current, w));
 
   bool changed{true};
-  while (changed) {
+  while (changed && id <= maxSweep) {
     changed = false;
-    for (size_t j{0}; j != N; ++j) {
+    for (size_t i{0}; i != N; ++i) {
       double sum{0.0};
-      for (size_t i{0}; i != N; ++i) {
-        sum += w(j, i) * newPattern.data[i];
+      for (size_t j{0}; j != N; ++j) {
+        sum += w(i, j) * current.data[j];
       }
-      int const s{sum > 0.0 ? 1 : (sum < 0.0 ? -1 : newPattern.data[j])};
-      if (s != newPattern.data[j]) {
-        newPattern.data[j] = s;
+      int const s{(sum > 0.0) ? 1 : ((sum < 0.0) ? -1 : current.data[i])};
+      if (s != current.data[i]) {
+        current.data[i] = s;
         changed = true;
       }
     }
     if (changed) {
-      callback(id++, newPattern, energy(newPattern, w));
+      callback(current, id++, energy(current, w));
     }
   }
-
-  return newPattern;
+  if (changed) {
+    throw std::runtime_error("Error: recall did not converge within " +
+                             std::to_string(maxSweep) + " sweeps.\n");
+  }
+  return current;
 }
 }  // namespace hopfield
