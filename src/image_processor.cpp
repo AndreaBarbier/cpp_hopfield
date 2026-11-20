@@ -42,9 +42,6 @@ std::vector<sf::Image> resizeImages(std::vector<sf::Image> const& inImgs) {
     throw std::runtime_error(
         "Error: empty vector inserted or full of invalid images.\n");
   }
-  for (auto const& img : validImgs) {
-    assert(isValidImage(img));
-  }
   auto minWidth{
       (*std::min_element(validImgs.begin(), validImgs.end(),
                          [](sf::Image const& left, sf::Image const& right) {

@@ -180,7 +180,7 @@ PatternInt Dataset::add(std::filesystem::path const& img) {
     throw std::runtime_error("Error: invalid image " + img.string() + '\n');
   }
   std::filesystem::copy_file(
-      img, dir_ / (timestamp() + name + img.extension().string()));
+      img, dir_ / (timestamp() + name));
   return imageToBinary(image);
 }
 

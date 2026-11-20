@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.28)
-project(progettopf VERSION 0.1.0)
+project(hopfield_network VERSION 0.1.0)
 
 # definisce PROJECT_ROOT come macro utilizzabile in cpp
 add_compile_definitions(PROJECT_ROOT="${CMAKE_SOURCE_DIR}")
@@ -17,42 +17,62 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # abilita warning
 string(APPEND CMAKE_CXX_FLAGS
-      " -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion"
-      " -Wshadow -Wimplicit-fallthrough -Wextra-semi -Wold-style-cast"
-      " -fno-omit-frame-pointer")
+  " -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion"
+  " -Wshadow -Wimplicit-fallthrough -Wextra-semi -Wold-style-cast"
+  " -fno-omit-frame-pointer")
 
 # abilita asserzioni della standard library
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   string(APPEND CMAKE_CXX_FLAGS " -D_GLIBCXX_ASSERTIONS")
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   string(APPEND CMAKE_CXX_FLAGS " -D_LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_EXTENSIVE")
 endif()
 
 # abilita address sanitizer e undefined-behaviour sanitizer in Debug mode
 string(APPEND CMAKE_CXX_FLAGS_DEBUG " -fsanitize=address,undefined")
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   string(APPEND CMAKE_CXX_FLAGS " -D_GLIBCXX_SANITIZE_STD_ALLOCATOR")
 endif()
 string(APPEND CMAKE_EXE_LINKER_FLAGS_DEBUG " -fsanitize=address,undefined")
 
 # se usato, richiedi il componente graphics della libreria SFML (versione 2.6 in Ubuntu 24.04)
-find_package(SFML 2.6 COMPONENTS graphics REQUIRED)
+find_package(SFML 3.0 COMPONENTS Graphics REQUIRED)
 
 # dichiara un eseguibile chiamato "progetto", prodotto a partire dai file sorgente indicati
 # sostituire "progetto" con il nome del proprio eseguibile e i file sorgente con i propri (con nomi sensati!)
-add_executable(progetto main.cpp file1.cpp file2.cpp)
+add_executable(hopfield_app
+  src/main.cpp
+  src/image_processor.cpp
+  src/hopfield.cpp
+  src/commands.cpp
+  src/plot.cpp
+  src/recall_view.cpp
+  src/repl.cpp
+  src/tokenizer.cpp)
 # nel caso si usi SFML. analogamente per eventuali altre librerie
-target_link_libraries(progetto PRIVATE sfml-graphics)
+target_link_libraries(hopfield_app PRIVATE SFML::Graphics)
 
 # aggiungere eventuali altri eseguibili
 
 # il testing e' abilitato di default
 # per disabilitarlo, passare -DBUILD_TESTING=OFF a cmake durante la fase di configurazione
-if (BUILD_TESTING)
+if(BUILD_TESTING)
+  # Test su image_processor (richiede SFML::Graphics)
+  add_executable(image_processor.test
+    src/tests/image_processor.test.cpp
+    src/image_processor.cpp
+  )
+  target_include_directories(image_processor.test PRIVATE src/tests)
+  target_link_libraries(image_processor.test PRIVATE SFML::Graphics)
+  add_test(NAME image_processor.test COMMAND image_processor.test)
 
-  # aggiungi l'eseguibile progetto.t
-  add_executable(progetto.t file.t.cpp)
-  # aggiungi l'eseguibile progetto.t alla lista dei test
-  add_test(NAME progetto.t COMMAND progetto.t)
-
+  # Test su hopfield
+  add_executable(hopfield.test
+    src/tests/hopfield.test.cpp
+    src/hopfield.cpp
+    src/image_processor.cpp
+  )
+  target_include_directories(hopfield.test PRIVATE src/tests)
+  target_link_libraries(hopfield.test PRIVATE SFML::Graphics)
+  add_test(NAME hopfield.test COMMAND hopfield.test)
 endif()

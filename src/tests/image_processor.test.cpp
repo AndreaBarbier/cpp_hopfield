@@ -2,34 +2,98 @@
 #include "../image_processor.hpp"
 
 #include <SFML/Graphics.hpp>
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 #include "doctest.h"
+
+namespace {
+
+std::filesystem::path makeTempDir(std::string const& label) {
+  static std::size_t counter = 0;
+  auto const path =
+      std::filesystem::temp_directory_path() /
+      ("hopfield_imgproc_" + label + "_" + std::to_string(++counter));
+  std::filesystem::remove_all(path);
+  std::filesystem::create_directories(path);
+  return path;
+}
+
+sf::Image makeSolidImage(unsigned int width, unsigned int height,
+                        sf::Color color) {
+  return sf::Image{sf::Vector2u{width, height}, color};
+}
+
+sf::Image makeCheckerboard(unsigned int width, unsigned int height,
+                           sf::Color evenColor, sf::Color oddColor) {
+  sf::Image img{sf::Vector2u{width, height}, oddColor};
+  for (unsigned int y = 0; y < height; ++y) {
+    for (unsigned int x = 0; x < width; ++x) {
+      if (((x + y) % 2u) == 0u) {
+        img.setPixel(sf::Vector2u{x, y}, evenColor);
+      }
+    }
+  }
+  return img;
+}
+
+sf::Image makeHorizontalBands(unsigned int width, unsigned int height,
+                               sf::Color topColor, sf::Color bottomColor) {
+  sf::Image img{sf::Vector2u{width, height}, topColor};
+  for (unsigned int y = height / 2u; y < height; ++y) {
+    for (unsigned int x = 0; x < width; ++x) {
+      img.setPixel(sf::Vector2u{x, y}, bottomColor);
+    }
+  }
+  return img;
+}
+
+sf::Image makeVerticalBands(unsigned int width, unsigned int height,
+                              sf::Color leftColor, sf::Color rightColor) {
+  sf::Image img{sf::Vector2u{width, height}, leftColor};
+  for (unsigned int y = 0; y < height; ++y) {
+    for (unsigned int x = width / 2u; x < width; ++x) {
+      img.setPixel(sf::Vector2u{x, y}, rightColor);
+    }
+  }
+  return img;
+}
+
+void checkImagesEqual(sf::Image const& actual, sf::Image const& expected) {
+  REQUIRE(actual.getSize() == expected.getSize());
+  for (unsigned int y = 0; y < expected.getSize().y; ++y) {
+    for (unsigned int x = 0; x < expected.getSize().x; ++x) {
+      CHECK(actual.getPixel(sf::Vector2u{x, y}) ==
+            expected.getPixel(sf::Vector2u{x, y}));
+    }
+  }
+}
+
+}  // namespace
 
 // ============================================================
 // IMAGE UTILITIES TEST CASE
 // ============================================================
 TEST_CASE("IMAGE UTILITIES") {
   // --- Some images ---
-  sf::Image imgEmpty;
-  imgEmpty.create(0u, 0u);
-  sf::Image imgZeroW;
-  imgZeroW.create(0u, 8u);
-  sf::Image imgZeroH;
-  imgZeroH.create(8u, 0u);
-  sf::Image imgValid;
-  imgValid.create(3u, 4u);
-  sf::Image imgCyan5x5;
-  imgCyan5x5.create(5u, 5u, sf::Color::Cyan);
-  sf::Image imgCyan0x0;
-  imgCyan0x0.create(0u, 0u, sf::Color::Cyan);
-  sf::Image imgCyan0x3;
-  imgCyan0x3.create(0u, 3u, sf::Color::Cyan);
-  sf::Image imgCyan3x0;
-  imgCyan3x0.create(3u, 0u, sf::Color::Cyan);
+  sf::Image imgEmpty{sf::Vector2u{0u, 0u}};
+  sf::Image imgZeroW{sf::Vector2u{0u, 8u}};
+  sf::Image imgZeroH{sf::Vector2u{8u, 0u}};
+  sf::Image imgValid{sf::Vector2u{3u, 4u}};
+  sf::Image imgCyan5x5{sf::Vector2u{5u, 5u}, sf::Color::Cyan};
+  sf::Image imgCyan0x0{sf::Vector2u{0u, 0u}, sf::Color::Cyan};
+  sf::Image imgCyan0x3{sf::Vector2u{0u, 3u}, sf::Color::Cyan};
+  sf::Image imgCyan3x0{sf::Vector2u{3u, 0u}, sf::Color::Cyan};
 
   // 8x8 image
-  sf::Image img8x8;
-  img8x8.create(8u, 8u);
+  sf::Image img8x8{sf::Vector2u{8u, 8u}};
   for (unsigned int j{0u}; j != 8u; ++j) {
     for (unsigned int i{0u}; i != 8u; ++i) {
       sf::Color color;
@@ -41,7 +105,7 @@ TEST_CASE("IMAGE UTILITIES") {
         color = sf::Color::Blue;
       else
         color = sf::Color::Yellow;
-      img8x8.setPixel(i, j, color);
+      img8x8.setPixel(sf::Vector2u{i, j}, color);
     }
   }
 
@@ -57,11 +121,10 @@ TEST_CASE("IMAGE UTILITIES") {
        sf::Color::Green},
       {sf::Color::Red, sf::Color::Red, sf::Color::Blue, sf::Color::Blue,
        sf::Color::Red}};
-  sf::Image correctImg5x5;
-  correctImg5x5.create(5u, 5u, sf::Color::Transparent);
+  sf::Image correctImg5x5{sf::Vector2u{5u, 5u}, sf::Color::Transparent};
   for (unsigned int j{0u}; j != 5u; ++j) {
     for (unsigned int i{0u}; i != 5u; ++i) {
-      correctImg5x5.setPixel(i, j, correctColors[j][i]);
+      correctImg5x5.setPixel(sf::Vector2u{i, j}, correctColors[j][i]);
     }
   }
 
@@ -85,7 +148,8 @@ TEST_CASE("IMAGE UTILITIES") {
     REQUIRE(outImgs.size() == 1);
     for (unsigned int j{0u}; j != outImgs[0].getSize().y; ++j) {
       for (unsigned int i{0u}; i != outImgs[0].getSize().x; ++i) {
-        CHECK(outImgs[0].getPixel(i, j) == imgValid.getPixel(i, j));
+        CHECK(outImgs[0].getPixel(sf::Vector2u{i, j}) ==
+              imgValid.getPixel(sf::Vector2u{i, j}));
       }
     }
   }
@@ -98,7 +162,8 @@ TEST_CASE("IMAGE UTILITIES") {
       CHECK(outImg.getSize() == correctImg5x5.getSize());
       for (unsigned int j{0u}; j != correctImg5x5.getSize().y; ++j) {
         for (unsigned int i{0u}; i != correctImg5x5.getSize().x; ++i) {
-          CHECK(outImg.getPixel(i, j) == correctImg5x5.getPixel(i, j));
+          CHECK(outImg.getPixel(sf::Vector2u{i, j}) ==
+                correctImg5x5.getPixel(sf::Vector2u{i, j}));
         }
       }
     }
@@ -109,7 +174,8 @@ TEST_CASE("IMAGE UTILITIES") {
       REQUIRE(outImg.getSize() == img8x8.getSize());
       for (unsigned int j{0u}; j != img8x8.getSize().y; ++j) {
         for (unsigned int i{0u}; i != img8x8.getSize().x; ++i) {
-          CHECK(outImg.getPixel(i, j) == img8x8.getPixel(i, j));
+          CHECK(outImg.getPixel(sf::Vector2u{i, j}) ==
+                img8x8.getPixel(sf::Vector2u{i, j}));
         }
       }
     }
@@ -134,7 +200,8 @@ TEST_CASE("IMAGE UTILITIES") {
         REQUIRE(outImgs[k].getSize() == solutions[k].getSize());
         for (unsigned int j{0u}; j != solutions[k].getSize().y; ++j) {
           for (unsigned int i{0u}; i != solutions[k].getSize().x; ++i) {
-            CHECK(outImgs[k].getPixel(i, j) == solutions[k].getPixel(i, j));
+            CHECK(outImgs[k].getPixel(sf::Vector2u{i, j}) ==
+                  solutions[k].getPixel(sf::Vector2u{i, j}));
           }
         }
       }
@@ -154,7 +221,8 @@ TEST_CASE("IMAGE UTILITIES") {
         REQUIRE(img.getSize() != sf::Vector2u{0u, 0u});
         for (unsigned int j{0u}; j != img.getSize().y; ++j) {
           for (unsigned int i{0u}; i != img.getSize().x; ++i) {
-            CHECK(img.getPixel(i, j) == imgCyan5x5.getPixel(i, j));
+            CHECK(img.getPixel(sf::Vector2u{i, j}) ==
+                  imgCyan5x5.getPixel(sf::Vector2u{i, j}));
           }
         }
       }
@@ -182,19 +250,16 @@ TEST_CASE("IMAGE UTILITIES") {
 // ============================================================
 TEST_CASE("IMAGE PROCESSING") {
   // ----- IMAGES -----
-  sf::Image allWhite;
-  allWhite.create(8u, 8u, sf::Color::White);
+  sf::Image allWhite{sf::Vector2u{8u, 8u}, sf::Color::White};
 
-  sf::Image allBlack;
-  allBlack.create(8u, 8u, sf::Color::Black);
+  sf::Image allBlack{sf::Vector2u{8u, 8u}, sf::Color::Black};
 
-  sf::Image blackWhiteChecker;
-  blackWhiteChecker.create(8u, 8u);
+  sf::Image blackWhiteChecker{sf::Vector2u{8u, 8u}};
   for (auto j{0u}; j != 8u; ++j) {
     for (auto i{0u}; i != 8u; ++i) {
       sf::Color pixelColor =
           ((j + i) % 2 == 0) ? sf::Color::White : sf::Color::Black;
-      blackWhiteChecker.setPixel(i, j, pixelColor);
+      blackWhiteChecker.setPixel(sf::Vector2u{i, j}, pixelColor);
     }
   }
 
@@ -203,8 +268,7 @@ TEST_CASE("IMAGE PROCESSING") {
   const sf::Color colorC{40u, 90u, 210u};   // blu
   const sf::Color colorD{210u, 160u, 30u};  // giallo-arancio
 
-  sf::Image rgbChecker;
-  rgbChecker.create(8u, 8u);
+  sf::Image rgbChecker{sf::Vector2u{8u, 8u}};
   for (unsigned int j{0u}; j != 8u; ++j) {
     for (unsigned int i{0u}; i != 8u; ++i) {
       sf::Color pixelColor;
@@ -216,7 +280,7 @@ TEST_CASE("IMAGE PROCESSING") {
         pixelColor = colorC;
       else
         pixelColor = colorD;
-      rgbChecker.setPixel(i, j, pixelColor);
+      rgbChecker.setPixel(sf::Vector2u{i, j}, pixelColor);
     }
   }
 
@@ -418,17 +482,17 @@ TEST_CASE("IMAGE PROCESSING") {
     REQUIRE(blackWhiteCheckerImg.getSize() == sf::Vector2u{8u, 8u});
     for (auto j{0u}; j != 8u; ++j) {
       for (auto i{0u}; i != 8u; ++i) {
-        CHECK(allWhiteImg.getPixel(i, j) == sf::Color::White);
+        CHECK(allWhiteImg.getPixel(sf::Vector2u{i, j}) == sf::Color::White);
       }
     }
     for (auto j{0u}; j != 8u; ++j) {
       for (auto i{0u}; i != 8u; ++i) {
-        CHECK(allBlackImg.getPixel(i, j) == sf::Color::Black);
+        CHECK(allBlackImg.getPixel(sf::Vector2u{i, j}) == sf::Color::Black);
       }
     }
     for (auto j{0u}; j != 8u; ++j) {
       for (auto i{0u}; i != 8u; ++i) {
-        CHECK(blackWhiteCheckerImg.getPixel(i, j) ==
+        CHECK(blackWhiteCheckerImg.getPixel(sf::Vector2u{i, j}) ==
               expectedBlackWhiteCheckerColors.data[j * 8u + i]);
       }
     }
@@ -443,19 +507,1659 @@ TEST_CASE("IMAGE PROCESSING") {
     REQUIRE(blackWhiteCheckerImg.getSize() == sf::Vector2u{8u, 8u});
     for (auto j{0u}; j != 8u; ++j) {
       for (auto i{0u}; i != 8u; ++i) {
-        CHECK(allWhiteImg.getPixel(i, j) == sf::Color::White);
+        CHECK(allWhiteImg.getPixel(sf::Vector2u{i, j}) == sf::Color::White);
       }
     }
     for (auto j{0u}; j != 8u; ++j) {
       for (auto i{0u}; i != 8u; ++i) {
-        CHECK(allBlackImg.getPixel(i, j) == sf::Color::Black);
+        CHECK(allBlackImg.getPixel(sf::Vector2u{i, j}) == sf::Color::Black);
       }
     }
     for (auto j{0u}; j != 8u; ++j) {
       for (auto i{0u}; i != 8u; ++i) {
-        CHECK(blackWhiteCheckerImg.getPixel(i, j) ==
+        CHECK(blackWhiteCheckerImg.getPixel(sf::Vector2u{i, j}) ==
               expectedBlackWhiteCheckerColors.data[j * 8u + i]);
       }
     }
   }
+}
+
+// ============================================================
+// EXTENDED VALIDATION, RESIZING & CONVERSION TESTS
+// ============================================================
+TEST_CASE("Image validation for 1x1 solid images") {
+  auto white = makeSolidImage(1u, 1u, sf::Color::White);
+  auto black = makeSolidImage(1u, 1u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 1u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{1u, 1u});
+  CHECK(valid[1].getSize() == sf::Vector2u{1u, 1u});
+}
+
+TEST_CASE("Image validation for 1x2 solid images") {
+  auto white = makeSolidImage(1u, 2u, sf::Color::White);
+  auto black = makeSolidImage(1u, 2u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 2u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{1u, 2u});
+  CHECK(valid[1].getSize() == sf::Vector2u{1u, 2u});
+}
+
+TEST_CASE("Image validation for 1x3 solid images") {
+  auto white = makeSolidImage(1u, 3u, sf::Color::White);
+  auto black = makeSolidImage(1u, 3u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 3u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{1u, 3u});
+  CHECK(valid[1].getSize() == sf::Vector2u{1u, 3u});
+}
+
+TEST_CASE("Image validation for 1x4 solid images") {
+  auto white = makeSolidImage(1u, 4u, sf::Color::White);
+  auto black = makeSolidImage(1u, 4u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 4u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{1u, 4u});
+  CHECK(valid[1].getSize() == sf::Vector2u{1u, 4u});
+}
+
+TEST_CASE("Image validation for 1x5 solid images") {
+  auto white = makeSolidImage(1u, 5u, sf::Color::White);
+  auto black = makeSolidImage(1u, 5u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 5u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{1u, 5u});
+  CHECK(valid[1].getSize() == sf::Vector2u{1u, 5u});
+}
+
+TEST_CASE("Image validation for 1x6 solid images") {
+  auto white = makeSolidImage(1u, 6u, sf::Color::White);
+  auto black = makeSolidImage(1u, 6u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 6u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{1u, 6u});
+  CHECK(valid[1].getSize() == sf::Vector2u{1u, 6u});
+}
+
+TEST_CASE("Image validation for 2x1 solid images") {
+  auto white = makeSolidImage(2u, 1u, sf::Color::White);
+  auto black = makeSolidImage(2u, 1u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 1u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{2u, 1u});
+  CHECK(valid[1].getSize() == sf::Vector2u{2u, 1u});
+}
+
+TEST_CASE("Image validation for 2x2 solid images") {
+  auto white = makeSolidImage(2u, 2u, sf::Color::White);
+  auto black = makeSolidImage(2u, 2u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 2u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{2u, 2u});
+  CHECK(valid[1].getSize() == sf::Vector2u{2u, 2u});
+}
+
+TEST_CASE("Image validation for 2x3 solid images") {
+  auto white = makeSolidImage(2u, 3u, sf::Color::White);
+  auto black = makeSolidImage(2u, 3u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 3u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{2u, 3u});
+  CHECK(valid[1].getSize() == sf::Vector2u{2u, 3u});
+}
+
+TEST_CASE("Image validation for 2x4 solid images") {
+  auto white = makeSolidImage(2u, 4u, sf::Color::White);
+  auto black = makeSolidImage(2u, 4u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 4u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{2u, 4u});
+  CHECK(valid[1].getSize() == sf::Vector2u{2u, 4u});
+}
+
+TEST_CASE("Image validation for 2x5 solid images") {
+  auto white = makeSolidImage(2u, 5u, sf::Color::White);
+  auto black = makeSolidImage(2u, 5u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 5u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{2u, 5u});
+  CHECK(valid[1].getSize() == sf::Vector2u{2u, 5u});
+}
+
+TEST_CASE("Image validation for 2x6 solid images") {
+  auto white = makeSolidImage(2u, 6u, sf::Color::White);
+  auto black = makeSolidImage(2u, 6u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 6u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{2u, 6u});
+  CHECK(valid[1].getSize() == sf::Vector2u{2u, 6u});
+}
+
+TEST_CASE("Image validation for 3x1 solid images") {
+  auto white = makeSolidImage(3u, 1u, sf::Color::White);
+  auto black = makeSolidImage(3u, 1u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 1u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{3u, 1u});
+  CHECK(valid[1].getSize() == sf::Vector2u{3u, 1u});
+}
+
+TEST_CASE("Image validation for 3x2 solid images") {
+  auto white = makeSolidImage(3u, 2u, sf::Color::White);
+  auto black = makeSolidImage(3u, 2u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 2u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{3u, 2u});
+  CHECK(valid[1].getSize() == sf::Vector2u{3u, 2u});
+}
+
+TEST_CASE("Image validation for 3x3 solid images") {
+  auto white = makeSolidImage(3u, 3u, sf::Color::White);
+  auto black = makeSolidImage(3u, 3u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 3u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{3u, 3u});
+  CHECK(valid[1].getSize() == sf::Vector2u{3u, 3u});
+}
+
+TEST_CASE("Image validation for 3x4 solid images") {
+  auto white = makeSolidImage(3u, 4u, sf::Color::White);
+  auto black = makeSolidImage(3u, 4u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 4u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{3u, 4u});
+  CHECK(valid[1].getSize() == sf::Vector2u{3u, 4u});
+}
+
+TEST_CASE("Image validation for 3x5 solid images") {
+  auto white = makeSolidImage(3u, 5u, sf::Color::White);
+  auto black = makeSolidImage(3u, 5u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 5u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{3u, 5u});
+  CHECK(valid[1].getSize() == sf::Vector2u{3u, 5u});
+}
+
+TEST_CASE("Image validation for 3x6 solid images") {
+  auto white = makeSolidImage(3u, 6u, sf::Color::White);
+  auto black = makeSolidImage(3u, 6u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 6u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{3u, 6u});
+  CHECK(valid[1].getSize() == sf::Vector2u{3u, 6u});
+}
+
+TEST_CASE("Image validation for 4x1 solid images") {
+  auto white = makeSolidImage(4u, 1u, sf::Color::White);
+  auto black = makeSolidImage(4u, 1u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 1u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{4u, 1u});
+  CHECK(valid[1].getSize() == sf::Vector2u{4u, 1u});
+}
+
+TEST_CASE("Image validation for 4x2 solid images") {
+  auto white = makeSolidImage(4u, 2u, sf::Color::White);
+  auto black = makeSolidImage(4u, 2u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 2u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{4u, 2u});
+  CHECK(valid[1].getSize() == sf::Vector2u{4u, 2u});
+}
+
+TEST_CASE("Image validation for 4x3 solid images") {
+  auto white = makeSolidImage(4u, 3u, sf::Color::White);
+  auto black = makeSolidImage(4u, 3u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 3u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{4u, 3u});
+  CHECK(valid[1].getSize() == sf::Vector2u{4u, 3u});
+}
+
+TEST_CASE("Image validation for 4x4 solid images") {
+  auto white = makeSolidImage(4u, 4u, sf::Color::White);
+  auto black = makeSolidImage(4u, 4u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 4u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{4u, 4u});
+  CHECK(valid[1].getSize() == sf::Vector2u{4u, 4u});
+}
+
+TEST_CASE("Image validation for 4x5 solid images") {
+  auto white = makeSolidImage(4u, 5u, sf::Color::White);
+  auto black = makeSolidImage(4u, 5u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 5u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{4u, 5u});
+  CHECK(valid[1].getSize() == sf::Vector2u{4u, 5u});
+}
+
+TEST_CASE("Image validation for 4x6 solid images") {
+  auto white = makeSolidImage(4u, 6u, sf::Color::White);
+  auto black = makeSolidImage(4u, 6u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 6u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{4u, 6u});
+  CHECK(valid[1].getSize() == sf::Vector2u{4u, 6u});
+}
+
+TEST_CASE("Image validation for 5x1 solid images") {
+  auto white = makeSolidImage(5u, 1u, sf::Color::White);
+  auto black = makeSolidImage(5u, 1u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 1u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{5u, 1u});
+  CHECK(valid[1].getSize() == sf::Vector2u{5u, 1u});
+}
+
+TEST_CASE("Image validation for 5x2 solid images") {
+  auto white = makeSolidImage(5u, 2u, sf::Color::White);
+  auto black = makeSolidImage(5u, 2u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 2u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{5u, 2u});
+  CHECK(valid[1].getSize() == sf::Vector2u{5u, 2u});
+}
+
+TEST_CASE("Image validation for 5x3 solid images") {
+  auto white = makeSolidImage(5u, 3u, sf::Color::White);
+  auto black = makeSolidImage(5u, 3u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 3u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{5u, 3u});
+  CHECK(valid[1].getSize() == sf::Vector2u{5u, 3u});
+}
+
+TEST_CASE("Image validation for 5x4 solid images") {
+  auto white = makeSolidImage(5u, 4u, sf::Color::White);
+  auto black = makeSolidImage(5u, 4u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 4u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{5u, 4u});
+  CHECK(valid[1].getSize() == sf::Vector2u{5u, 4u});
+}
+
+TEST_CASE("Image validation for 5x5 solid images") {
+  auto white = makeSolidImage(5u, 5u, sf::Color::White);
+  auto black = makeSolidImage(5u, 5u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 5u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{5u, 5u});
+  CHECK(valid[1].getSize() == sf::Vector2u{5u, 5u});
+}
+
+TEST_CASE("Image validation for 5x6 solid images") {
+  auto white = makeSolidImage(5u, 6u, sf::Color::White);
+  auto black = makeSolidImage(5u, 6u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 6u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{5u, 6u});
+  CHECK(valid[1].getSize() == sf::Vector2u{5u, 6u});
+}
+
+TEST_CASE("Image validation for 6x1 solid images") {
+  auto white = makeSolidImage(6u, 1u, sf::Color::White);
+  auto black = makeSolidImage(6u, 1u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 1u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{6u, 1u});
+  CHECK(valid[1].getSize() == sf::Vector2u{6u, 1u});
+}
+
+TEST_CASE("Image validation for 6x2 solid images") {
+  auto white = makeSolidImage(6u, 2u, sf::Color::White);
+  auto black = makeSolidImage(6u, 2u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 2u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{6u, 2u});
+  CHECK(valid[1].getSize() == sf::Vector2u{6u, 2u});
+}
+
+TEST_CASE("Image validation for 6x3 solid images") {
+  auto white = makeSolidImage(6u, 3u, sf::Color::White);
+  auto black = makeSolidImage(6u, 3u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 3u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{6u, 3u});
+  CHECK(valid[1].getSize() == sf::Vector2u{6u, 3u});
+}
+
+TEST_CASE("Image validation for 6x4 solid images") {
+  auto white = makeSolidImage(6u, 4u, sf::Color::White);
+  auto black = makeSolidImage(6u, 4u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 4u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{6u, 4u});
+  CHECK(valid[1].getSize() == sf::Vector2u{6u, 4u});
+}
+
+TEST_CASE("Image validation for 6x5 solid images") {
+  auto white = makeSolidImage(6u, 5u, sf::Color::White);
+  auto black = makeSolidImage(6u, 5u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 5u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{6u, 5u});
+  CHECK(valid[1].getSize() == sf::Vector2u{6u, 5u});
+}
+
+TEST_CASE("Image validation for 6x6 solid images") {
+  auto white = makeSolidImage(6u, 6u, sf::Color::White);
+  auto black = makeSolidImage(6u, 6u, sf::Color::Black);
+  CHECK(hopfield::isValidImage(white));
+  CHECK(hopfield::isValidImage(black));
+  std::vector<sf::Image> batch{white, sf::Image{sf::Vector2u{0u, 6u}}, black};
+  auto valid = hopfield::validateImages(batch);
+  REQUIRE(valid.size() == 2u);
+  CHECK(valid[0].getSize() == sf::Vector2u{6u, 6u});
+  CHECK(valid[1].getSize() == sf::Vector2u{6u, 6u});
+}
+
+TEST_CASE("Resize regression pair 01: 4x4 -> 2x2") {
+  auto src = makeHorizontalBands(4u, 4u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{2u, 2u});
+  CHECK(resized.getSize() == sf::Vector2u{2u, 2u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{2u, 2u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(2u) * 2u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 02: 6x8 -> 2x4") {
+  auto src = makeHorizontalBands(6u, 8u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{2u, 4u});
+  CHECK(resized.getSize() == sf::Vector2u{2u, 4u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{2u, 4u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(2u) * 4u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 03: 6x10 -> 3x5") {
+  auto src = makeHorizontalBands(6u, 10u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{3u, 5u});
+  CHECK(resized.getSize() == sf::Vector2u{3u, 5u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{3u, 5u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(3u) * 5u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 04: 5x5 -> 1x1") {
+  auto src = makeHorizontalBands(5u, 5u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{1u, 1u});
+  CHECK(resized.getSize() == sf::Vector2u{1u, 1u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{1u, 1u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(1u) * 1u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 05: 5x5 -> 3x2") {
+  auto src = makeHorizontalBands(5u, 5u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{3u, 2u});
+  CHECK(resized.getSize() == sf::Vector2u{3u, 2u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{3u, 2u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(3u) * 2u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 06: 6x4 -> 3x3") {
+  auto src = makeHorizontalBands(6u, 4u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{3u, 3u});
+  CHECK(resized.getSize() == sf::Vector2u{3u, 3u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{3u, 3u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(3u) * 3u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 07: 4x6 -> 2x2") {
+  auto src = makeHorizontalBands(4u, 6u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{2u, 2u});
+  CHECK(resized.getSize() == sf::Vector2u{2u, 2u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{2u, 2u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(2u) * 2u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 08: 7x7 -> 3x5") {
+  auto src = makeHorizontalBands(7u, 7u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{3u, 5u});
+  CHECK(resized.getSize() == sf::Vector2u{3u, 5u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{3u, 5u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(3u) * 5u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 09: 8x8 -> 4x6") {
+  auto src = makeHorizontalBands(8u, 8u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{4u, 6u});
+  CHECK(resized.getSize() == sf::Vector2u{4u, 6u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{4u, 6u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(4u) * 6u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 10: 6x6 -> 5x4") {
+  auto src = makeHorizontalBands(6u, 6u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{5u, 4u});
+  CHECK(resized.getSize() == sf::Vector2u{5u, 4u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{5u, 4u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(5u) * 4u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 11: 5x5 -> 5x5") {
+  auto src = makeHorizontalBands(5u, 5u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{5u, 5u});
+  CHECK(resized.getSize() == sf::Vector2u{5u, 5u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{5u, 5u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(5u) * 5u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 12: 2x3 -> 2x3") {
+  auto src = makeHorizontalBands(2u, 3u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{2u, 3u});
+  CHECK(resized.getSize() == sf::Vector2u{2u, 3u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{2u, 3u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(2u) * 3u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 13: 6x2 -> 6x2") {
+  auto src = makeHorizontalBands(6u, 2u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{6u, 2u});
+  CHECK(resized.getSize() == sf::Vector2u{6u, 2u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{6u, 2u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(6u) * 2u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 14: 4x4 -> 1x1") {
+  auto src = makeHorizontalBands(4u, 4u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{1u, 1u});
+  CHECK(resized.getSize() == sf::Vector2u{1u, 1u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{1u, 1u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(1u) * 1u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 15: 8x6 -> 4x3") {
+  auto src = makeHorizontalBands(8u, 6u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{4u, 3u});
+  CHECK(resized.getSize() == sf::Vector2u{4u, 3u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{4u, 3u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(4u) * 3u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 16: 6x8 -> 3x4") {
+  auto src = makeHorizontalBands(6u, 8u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{3u, 4u});
+  CHECK(resized.getSize() == sf::Vector2u{3u, 4u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{3u, 4u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(3u) * 4u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 17: 5x4 -> 2x2") {
+  auto src = makeHorizontalBands(5u, 4u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{2u, 2u});
+  CHECK(resized.getSize() == sf::Vector2u{2u, 2u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{2u, 2u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(2u) * 2u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 18: 4x5 -> 2x3") {
+  auto src = makeHorizontalBands(4u, 5u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{2u, 3u});
+  CHECK(resized.getSize() == sf::Vector2u{2u, 3u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{2u, 3u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(2u) * 3u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 19: 7x5 -> 3x2") {
+  auto src = makeHorizontalBands(7u, 5u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{3u, 2u});
+  CHECK(resized.getSize() == sf::Vector2u{3u, 2u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{3u, 2u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(3u) * 2u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Resize regression pair 20: 5x7 -> 2x3") {
+  auto src = makeHorizontalBands(5u, 7u, sf::Color::White, sf::Color::Black);
+  auto resized = hopfield::resizeImage(src, sf::Vector2u{2u, 3u});
+  CHECK(resized.getSize() == sf::Vector2u{2u, 3u});
+  CHECK(hopfield::isValidImage(resized));
+  auto bin = hopfield::imageToBinary(resized);
+  CHECK(bin.size == sf::Vector2u{2u, 3u});
+  CHECK(bin.data.size() == static_cast<std::size_t>(2u) * 3u);
+  for (int spin : bin.data) {
+    CHECK((spin == 1 || spin == -1));
+  }
+}
+
+TEST_CASE("Color and binary conversion case 01 (3x4)") {
+  auto checker = makeCheckerboard(3u, 4u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{3u, 4u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{3u, 4u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 02 (4x6)") {
+  auto checker = makeCheckerboard(4u, 6u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{4u, 6u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{4u, 6u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 03 (5x3)") {
+  auto checker = makeCheckerboard(5u, 3u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{5u, 3u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{5u, 3u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 04 (6x5)") {
+  auto checker = makeCheckerboard(6u, 5u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{6u, 5u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{6u, 5u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 05 (2x2)") {
+  auto checker = makeCheckerboard(2u, 2u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{2u, 2u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{2u, 2u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 06 (3x4)") {
+  auto checker = makeCheckerboard(3u, 4u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{3u, 4u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{3u, 4u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 07 (4x6)") {
+  auto checker = makeCheckerboard(4u, 6u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{4u, 6u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{4u, 6u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 08 (5x3)") {
+  auto checker = makeCheckerboard(5u, 3u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{5u, 3u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{5u, 3u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 09 (6x5)") {
+  auto checker = makeCheckerboard(6u, 5u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{6u, 5u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{6u, 5u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 10 (2x2)") {
+  auto checker = makeCheckerboard(2u, 2u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{2u, 2u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{2u, 2u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 11 (3x4)") {
+  auto checker = makeCheckerboard(3u, 4u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{3u, 4u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{3u, 4u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 12 (4x6)") {
+  auto checker = makeCheckerboard(4u, 6u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{4u, 6u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{4u, 6u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 13 (5x3)") {
+  auto checker = makeCheckerboard(5u, 3u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{5u, 3u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{5u, 3u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 14 (6x5)") {
+  auto checker = makeCheckerboard(6u, 5u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{6u, 5u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{6u, 5u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 15 (2x2)") {
+  auto checker = makeCheckerboard(2u, 2u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{2u, 2u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{2u, 2u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 16 (3x4)") {
+  auto checker = makeCheckerboard(3u, 4u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{3u, 4u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{3u, 4u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 17 (4x6)") {
+  auto checker = makeCheckerboard(4u, 6u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{4u, 6u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{4u, 6u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 18 (5x3)") {
+  auto checker = makeCheckerboard(5u, 3u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{5u, 3u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{5u, 3u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 19 (6x5)") {
+  auto checker = makeCheckerboard(6u, 5u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{6u, 5u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{6u, 5u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 20 (2x2)") {
+  auto checker = makeCheckerboard(2u, 2u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{2u, 2u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{2u, 2u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 21 (3x4)") {
+  auto checker = makeCheckerboard(3u, 4u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{3u, 4u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{3u, 4u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 22 (4x6)") {
+  auto checker = makeCheckerboard(4u, 6u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{4u, 6u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{4u, 6u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(4u) * 6u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 23 (5x3)") {
+  auto checker = makeCheckerboard(5u, 3u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{5u, 3u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{5u, 3u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 24 (6x5)") {
+  auto checker = makeCheckerboard(6u, 5u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{6u, 5u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{6u, 5u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(6u) * 5u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Color and binary conversion case 25 (2x2)") {
+  auto checker = makeCheckerboard(2u, 2u, sf::Color::White, sf::Color::Black);
+  auto rgb = hopfield::imageToColors(checker);
+  REQUIRE(rgb.size == sf::Vector2u{2u, 2u});
+  REQUIRE(rgb.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto rebuiltFromRgb = hopfield::colorsToImage(rgb);
+  checkImagesEqual(rebuiltFromRgb, checker);
+
+  auto bin = hopfield::imageToBinary(checker);
+  REQUIRE(bin.size == sf::Vector2u{2u, 2u});
+  REQUIRE(bin.data.size() == static_cast<std::size_t>(2u) * 2u);
+
+  auto binColors = hopfield::binaryToColors(bin);
+  REQUIRE(binColors.size == bin.size);
+  REQUIRE(binColors.data.size() == bin.data.size());
+
+  auto rebuiltFromBin = hopfield::binaryToImage(bin);
+  checkImagesEqual(rebuiltFromBin, checker);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 01") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(1));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(3u, 4u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(3u, 4u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{3u, 4u});
+  CHECK(bins[1].size == sf::Vector2u{3u, 4u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(3u) * 4u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 02") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(2));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(4u, 5u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(4u, 5u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{4u, 5u});
+  CHECK(bins[1].size == sf::Vector2u{4u, 5u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(4u) * 5u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(4u) * 5u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 03") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(3));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(5u, 3u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(5u, 3u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{5u, 3u});
+  CHECK(bins[1].size == sf::Vector2u{5u, 3u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(5u) * 3u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 04") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(4));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(2u, 4u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(2u, 4u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{2u, 4u});
+  CHECK(bins[1].size == sf::Vector2u{2u, 4u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(2u) * 4u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(2u) * 4u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 05") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(5));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(3u, 5u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(3u, 5u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{3u, 5u});
+  CHECK(bins[1].size == sf::Vector2u{3u, 5u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(3u) * 5u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(3u) * 5u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 06") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(6));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(4u, 3u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(4u, 3u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{4u, 3u});
+  CHECK(bins[1].size == sf::Vector2u{4u, 3u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(4u) * 3u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(4u) * 3u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 07") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(7));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(5u, 4u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(5u, 4u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{5u, 4u});
+  CHECK(bins[1].size == sf::Vector2u{5u, 4u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(5u) * 4u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(5u) * 4u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 08") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(8));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(2u, 5u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(2u, 5u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{2u, 5u});
+  CHECK(bins[1].size == sf::Vector2u{2u, 5u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(2u) * 5u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(2u) * 5u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 09") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(9));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(3u, 3u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(3u, 3u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{3u, 3u});
+  CHECK(bins[1].size == sf::Vector2u{3u, 3u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(3u) * 3u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(3u) * 3u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 10") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(10));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(4u, 4u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(4u, 4u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{4u, 4u});
+  CHECK(bins[1].size == sf::Vector2u{4u, 4u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(4u) * 4u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(4u) * 4u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 11") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(11));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(5u, 5u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(5u, 5u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{5u, 5u});
+  CHECK(bins[1].size == sf::Vector2u{5u, 5u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(5u) * 5u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(5u) * 5u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 12") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(12));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(2u, 3u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(2u, 3u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{2u, 3u});
+  CHECK(bins[1].size == sf::Vector2u{2u, 3u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(2u) * 3u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(2u) * 3u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 13") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(13));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(3u, 4u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(3u, 4u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{3u, 4u});
+  CHECK(bins[1].size == sf::Vector2u{3u, 4u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(3u) * 4u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(3u) * 4u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 14") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(14));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(4u, 5u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(4u, 5u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{4u, 5u});
+  CHECK(bins[1].size == sf::Vector2u{4u, 5u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(4u) * 5u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(4u) * 5u);
+
+  std::filesystem::remove_all(dir);
+}
+
+TEST_CASE("Image file round-trip and batch conversion 15") {
+  auto dir = makeTempDir("io_batch_" + std::to_string(15));
+  auto p1 = dir / "band_a.png";
+  auto p2 = dir / "band_b.png";
+
+  auto imgA = makeHorizontalBands(5u, 3u, sf::Color::White, sf::Color::Black);
+  auto imgB = makeVerticalBands(5u, 3u, sf::Color::Black, sf::Color::White);
+  REQUIRE(imgA.saveToFile(p1));
+  REQUIRE(imgB.saveToFile(p2));
+
+  sf::Image loadedA;
+  sf::Image loadedB;
+  REQUIRE(loadedA.loadFromFile(p1));
+  REQUIRE(loadedB.loadFromFile(p2));
+
+  checkImagesEqual(loadedA, imgA);
+  checkImagesEqual(loadedB, imgB);
+
+  auto bins = hopfield::imageToBinaries({loadedA, loadedB});
+  REQUIRE(bins.size() == 2u);
+  CHECK(bins[0].size == sf::Vector2u{5u, 3u});
+  CHECK(bins[1].size == sf::Vector2u{5u, 3u});
+  CHECK(bins[0].data.size() == static_cast<std::size_t>(5u) * 3u);
+  CHECK(bins[1].data.size() == static_cast<std::size_t>(5u) * 3u);
+
+  std::filesystem::remove_all(dir);
 }
