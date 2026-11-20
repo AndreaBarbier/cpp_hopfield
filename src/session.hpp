@@ -24,7 +24,7 @@ struct Session {
   Network& net() {
     if (!loadedNet) {
       throw std::runtime_error(
-          "Error: no network selected, use 'init' or 'use-net'");
+          "Error: no network selected, use 'new-net' or 'use-net'");
     }
     return *loadedNet;
   }
@@ -32,7 +32,7 @@ struct Session {
   const Network& net() const {
     if (!loadedNet) {
       throw std::runtime_error(
-          "Error: no network selected, use 'init' or 'use-net'");
+          "Error: no network selected, use 'new-net' or 'use-net'");
     }
     return *loadedNet;
   }
@@ -40,7 +40,7 @@ struct Session {
   const std::filesystem::path& netFile() const {
     if (netPath.empty()) {
       throw std::runtime_error(
-          "Error: no network selected, use 'init' or 'use-net'");
+          "Error: no network selected, use 'new-net' or 'use-net'");
     }
     return netPath;
   }

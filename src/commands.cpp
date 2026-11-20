@@ -216,7 +216,7 @@ void cmdRemove(Session& session, Args const& args, std::ostream& out) {
 void cmdNewNet(Session& session, Args const& args, std::ostream& out) {
   if (args.size() != std::size_t{2}) {
     throw std::runtime_error(
-        "Error: wrong numbers of arguments. Try 'help init'.\n");
+        "Error: wrong numbers of arguments. Try 'help new-net'.\n");
   }
   std::filesystem::path const hop{expandHome(args[0]) + "/" + args[1] + ".hop"};
   auto dataset{session.dataset()};
