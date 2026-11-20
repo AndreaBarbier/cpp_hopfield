@@ -23,15 +23,14 @@ sf::Image resizeImage(sf::Image const& img, sf::Vector2u targetSize) {
   // Assert because it will not be a runtime error if the size is wrong
   assert(targetSize.x <= oldSize.x && targetSize.y <= oldSize.y &&
          isValidImage(img));
-  sf::Image newImg;
-  newImg.create(targetSize.x, targetSize.y);
+  sf::Image newImg{sf::Vector2u{targetSize.x, targetSize.y}};
   for (auto j{0u}; j != targetSize.y; ++j) {
     for (auto i{0u}; i != targetSize.x; ++i) {
       // To round correctly j_o and i_o, add half the denominator to the
       // numerator
       auto j_o = ((j * oldSize.y + targetSize.y / 2) / targetSize.y);
       auto i_o = ((i * oldSize.x + targetSize.x / 2) / targetSize.x);
-      newImg.setPixel(i, j, img.getPixel(i_o, j_o));
+      newImg.setPixel(sf::Vector2u{i, j}, img.getPixel(sf::Vector2u{i_o, j_o}));
     }
   }
   return newImg;
@@ -79,7 +78,7 @@ PatternRGB imageToColors(sf::Image const& img) {
   PatternRGB outPattern;
   for (auto j{0u}; j != imgSize.y; ++j) {
     for (auto i{0u}; i != imgSize.x; ++i) {
-      outPattern.data.push_back(img.getPixel(i, j));
+      outPattern.data.push_back(img.getPixel(sf::Vector2u{i, j}));
     }
   }
   outPattern.size = imgSize;
@@ -92,7 +91,9 @@ PatternInt colorsToBinary(PatternRGB const& inPattern) {
          inPattern.size.y > 0u);
   PatternInt outPattern;
   for (auto const& c : inPattern.data) {
-    auto grey = (c.r + c.g + c.b) / 3u;
+    auto grey{(static_cast<unsigned int>(c.r) +
+                         static_cast<unsigned int>(c.g) +
+                         static_cast<unsigned int>(c.b)) / 3u};
     outPattern.data.push_back((grey > 127u) ? (1) : (-1));
   }
   outPattern.size = inPattern.size;
@@ -132,12 +133,11 @@ sf::Image colorsToImage(PatternRGB const& inPattern) {
   auto x{inPattern.size.x};
   auto y{inPattern.size.y};
   assert(!inPattern.data.empty() && x > 0u && y > 0u);
-  sf::Image outImg;
-  outImg.create(x, y);
+  sf::Image outImg{sf::Vector2u{x,y}};
 
   for (auto j{0u}; j != y; ++j) {
     for (auto i{0u}; i != x; ++i) {
-      outImg.setPixel(i, j, inPattern.data[j * x + i]);
+      outImg.setPixel(sf::Vector2u{i, j}, inPattern.data[j * x + i]);
     }
   }
   return outImg;

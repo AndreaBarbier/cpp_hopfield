@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <vector>
 
-/// @file ImageProcessor.hpp
+/// @file image_processor.hpp
 /// @brief Utilities for loading and processing images into patterns
 
 namespace hopfield {
