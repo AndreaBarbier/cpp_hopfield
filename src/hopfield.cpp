@@ -179,8 +179,7 @@ PatternInt Dataset::add(std::filesystem::path const& img) {
   if (!isValidImage(image)) {
     throw std::runtime_error("Error: invalid image " + img.string() + '\n');
   }
-  std::filesystem::copy_file(
-      img, dir_ / (timestamp() + name));
+  std::filesystem::copy_file(img, dir_ / (timestamp() + name));
   return imageToBinary(image);
 }
 
@@ -318,20 +317,19 @@ void Network::save(std::filesystem::path const& file) const {
   std::filesystem::rename(tmp, file);
 }
 
-void Network::learn(PatternInt const& p, double sign) {
+void Network::learn(PatternInt const& p) {
   assert(!w_.matrix.empty());
   assert(w_.cols == w_.rows);
   assert(size_ == p.size);
   assert(w_.cols == p.data.size());
-  auto const count{p.data.size()};
-  double const N{static_cast<double>(count)};
-  for (std::size_t j{0}; j != count; ++j) {
-    w_(j, j) = 0;
-    for (std::size_t i{j + 1}; i != count; ++i) {
-      double sum{sign * p.data[i] * p.data[j]};
-      w_(i, j) += sum / N;
-      w_(j, i) += sum / N;
-      assert(w_(i, j) == w_(j, i));
+
+  std::size_t const n{p.data.size()};
+  double const invN{1.0 / static_cast<double>(n)};
+  for (std::size_t j{0}; j != n; ++j) {
+    for (std::size_t i{j + 1}; i != n; ++i) {
+      double const delta{p.data[i] * p.data[j] * invN};
+      w_.matrix[i * n + j] += delta;
+      w_.matrix[j * n + i] += delta;
     }
   }
 }
@@ -389,10 +387,9 @@ PatternInt Network::recall(PatternInt const& inPattern, std::size_t maxSweep,
       }
     }
     if (changed) {
+      ++id;
       if (callback) {
-        callback(outPattern, id++, energy(outPattern, w_));
-      } else {
-        ++id;
+        callback(outPattern, id, energy(outPattern, w_));
       }
     }
   }

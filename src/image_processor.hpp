@@ -38,6 +38,8 @@ sf::Image resizeImage(sf::Image const& img, sf::Vector2u targetSize);
 /// @return Returns a vector with all the valid images scaled
 std::vector<sf::Image> resizeImages(std::vector<sf::Image> const& inImgs);
 
+sf::Image corruptImage(std::filesystem::path const& inFile, double p);
+
 // ============================================================
 // IMAGE PROCESSING
 // ============================================================

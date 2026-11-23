@@ -1,5 +1,7 @@
 #include "image_processor.hpp"
 
+#include <random>
+
 namespace hopfield {
 // ============================================================
 // IMAGE UTILITIES
@@ -64,6 +66,31 @@ std::vector<sf::Image> resizeImages(std::vector<sf::Image> const& inImgs) {
   return outImgs;
 }
 
+sf::Image corruptImage(std::filesystem::path const& inFile, double p) {
+  if (!(p >= 0.0 && p <= 1.0)) {
+    throw std::runtime_error("Error: noise probability must be in [0, 1].\n");
+  }
+  sf::Image inImg{};
+  if (!inImg.loadFromFile(inFile)) {
+    throw std::runtime_error("Error: impossible to load the image " +
+                             inFile.string() + '\n');
+  }
+  if (!isValidImage(inImg)) {
+    throw std::runtime_error("Error: impossible to corrupt an invalid image\n");
+  }
+
+  PatternInt pattern{imageToBinary(inImg)};
+  std::random_device rd{};
+  std::default_random_engine gen{rd()};
+  std::bernoulli_distribution flip{p};
+  for (auto& v : pattern.data) {
+    if (flip(gen)) {
+      v = -v;
+    }
+  }
+  return binaryToImage(pattern);
+}
+
 // ============================================================
 // IMAGE PROCESSING
 // ============================================================
@@ -88,9 +115,9 @@ PatternInt colorsToBinary(PatternRGB const& inPattern) {
          inPattern.size.y > 0u);
   PatternInt outPattern;
   for (auto const& c : inPattern.data) {
-    auto grey{(static_cast<unsigned int>(c.r) +
-                         static_cast<unsigned int>(c.g) +
-                         static_cast<unsigned int>(c.b)) / 3u};
+    auto grey{(static_cast<unsigned int>(c.r) + static_cast<unsigned int>(c.g) +
+               static_cast<unsigned int>(c.b)) /
+              3u};
     outPattern.data.push_back((grey > 127u) ? (1) : (-1));
   }
   outPattern.size = inPattern.size;
@@ -130,7 +157,7 @@ sf::Image colorsToImage(PatternRGB const& inPattern) {
   auto x{inPattern.size.x};
   auto y{inPattern.size.y};
   assert(!inPattern.data.empty() && x > 0u && y > 0u);
-  sf::Image outImg{sf::Vector2u{x,y}};
+  sf::Image outImg{sf::Vector2u{x, y}};
 
   for (auto j{0u}; j != y; ++j) {
     for (auto i{0u}; i != x; ++i) {

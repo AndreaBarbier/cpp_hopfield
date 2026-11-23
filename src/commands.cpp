@@ -21,6 +21,47 @@
 
 namespace hopfield {
 
+std::size_t parseMaxSteps(std::string const& text) {
+  auto const fail{[] {
+    return std::runtime_error(
+        "Error: --max-steps must be a positive integer.\n");
+  }};
+  // stoull accepts negative numbers by wrapping them: reject them first.
+  if (text.empty() || text[0] == '-') {
+    throw fail();
+  }
+  unsigned long long val{0};
+  std::size_t idx{0};
+  try {
+    val = std::stoull(text, &idx, 10);
+  } catch (std::exception const&) {  // invalid_argument, out_of_range
+    throw fail();
+  }
+  if (idx != text.size() || val == 0) {
+    throw fail();
+  }
+  return static_cast<std::size_t>(val);
+}
+
+double parseNoise(std::string const& text) {
+  auto const fail{[] {
+    return std::runtime_error(
+        "Error: --noise must be a number between 0 and 1.\n");
+  }};
+  double value{0.0};
+  std::size_t idx{0};
+  try {
+    value = std::stod(text, &idx);
+  } catch (std::exception const&) {
+    throw fail();
+  }
+  // written this way so that NaN is rejected too
+  if (idx != text.size() || !(value >= 0.0 && value <= 1.0)) {
+    throw fail();
+  }
+  return value;
+}
+
 std::map<std::string, Command> const& commandsTable() {
   static std::map<std::string, Command> const commands{
       {"help",
@@ -58,15 +99,16 @@ std::map<std::string, Command> const& commandsTable() {
         "Run the current network on an image and report steps, convergence "
         "and energy.",
         cmdRecall}},
+      {"corrupt",
+       {"corrupt <image> -o <file> [--noise p]",
+        "Flip each pixel of an image with probability p (default 0.25) and "
+        "save the result.",
+        cmdCorrupt}},
       {"info",
        {"info",
         "Show name, size, neuron count, training state and dataset "
         "compatibility of the current network.",
         cmdInfo}},
-      {"forget",
-       {"forget <name>",
-        "Remove a pattern from the weights using the inverse Hebb rule.",
-        cmdForget}},
   };
   return commands;
 }
@@ -218,7 +260,8 @@ void cmdNewNet(Session& session, Args const& args, std::ostream& out) {
     throw std::runtime_error(
         "Error: wrong numbers of arguments. Try 'help new-net'.\n");
   }
-  std::filesystem::path const hop{expandHome(args[0]) + "/" + args[1] + ".hop"};
+  std::filesystem::path const hop{std::filesystem::path{expandHome(args[0])} /
+                                  (args[1] + ".hop")};
   auto dataset{session.dataset()};
   Network net{dataset.size()};
   session.setNet(hop, std::move(net));
@@ -255,7 +298,6 @@ void cmdRecall(Session& session, Args const& args, std::ostream& out) {
                                            {"no-window", "", false},
                                            {"max-steps", "", true},
                                        })};
-
   if (parsed.positional.size() != std::size_t{1}) {
     throw std::runtime_error(
         "Error: wrong number of arguments. Try 'help recall'.\n");
@@ -264,70 +306,51 @@ void cmdRecall(Session& session, Args const& args, std::ostream& out) {
   std::size_t maxSteps{1000};
   if (auto const it{parsed.values.find("max-steps")};
       it != parsed.values.end()) {
-    if (it->second.empty() || it->second[0] == '-') {
-      throw std::runtime_error(
-          "Error: --max-steps must be a positive integer.\n");
-    }
-    std::size_t idx{0};
-    unsigned long long const val{std::stoull(it->second, &idx, 10)};
-    if (idx != it->second.size() || val == 0) {
-      throw std::runtime_error(
-          "Error: --max-steps must be a positive integer.\n");
-    }
-    maxSteps = static_cast<std::size_t>(val);
+    maxSteps = parseMaxSteps(it->second);
   }
 
   Network const& net{session.net()};
-  auto const imgPath{std::filesystem::path{expandHome(parsed.positional[0])}};
+  if (!net.isTrained()) {
+    throw std::runtime_error("Error: the network is not trained.\n");
+  }
 
-  if (!std::filesystem::is_regular_file(imgPath) ||
-      !hasImageExtension(imgPath)) {
+  std::filesystem::path const imgPath{expandHome(parsed.positional[0])};
+  if (!isImageFile(imgPath)) {
     throw std::runtime_error("Error: invalid image file '" + imgPath.string() +
                              "'.\n");
   }
-
   sf::Image img{};
   if (!img.loadFromFile(imgPath) || !isValidImage(img)) {
     throw std::runtime_error("Error: cannot load valid image '" +
                              imgPath.string() + "'.\n");
   }
-
-  auto const targetSize{net.size()};
-  if (img.getSize() != targetSize) {
+  auto const netSize{net.size()};
+  if (img.getSize() != netSize) {
     throw std::runtime_error(
         "Error: image size (" + std::to_string(img.getSize().x) + "x" +
         std::to_string(img.getSize().y) + ") does not match network size (" +
-        std::to_string(targetSize.x) + "x" + std::to_string(targetSize.y) +
-        ").\n");
+        std::to_string(netSize.x) + "x" + std::to_string(netSize.y) + ").\n");
   }
 
   PatternInt const inputPattern{imageToBinary(img)};
 
   std::size_t steps{0};
   double finalEnergy{0.0};
-  PatternInt lastPattern{inputPattern};
-
-  auto onStep = [&](PatternInt const& current, std::size_t id,
-                    double currentEnergy) {
-    lastPattern = current;
+  auto const onStep{[&](PatternInt const&, std::size_t id, double energy) {
     steps = id;
-    finalEnergy = currentEnergy;
-  };
+    finalEnergy = energy;
+  }};
 
-  bool const noWindow{parsed.flags.contains("no-window")};
-  PatternInt resultPattern{inputPattern};
-
-  if (noWindow) {
-    resultPattern = net.recall(inputPattern, maxSteps, onStep);
-  } else {
-    resultPattern = runRecallView(net, inputPattern, maxSteps, onStep);
-  }
+  // Both throw std::runtime_error if the recall does not converge.
+  PatternInt const result{
+      parsed.flags.contains("no-window")
+          ? net.recall(inputPattern, maxSteps, onStep)
+          : runRecallView(net, inputPattern, maxSteps, onStep)};
 
   if (auto const outIt{parsed.values.find("output")};
       outIt != parsed.values.end()) {
-    auto const outPath{std::filesystem::path{expandHome(outIt->second)}};
-    sf::Image const outImg{binaryToImage(resultPattern)};
-    if (!outImg.saveToFile(outPath)) {
+    std::filesystem::path const outPath{expandHome(outIt->second)};
+    if (!binaryToImage(result).saveToFile(outPath)) {
       throw std::runtime_error("Error: cannot save output image to '" +
                                outPath.string() + "'.\n");
     }
@@ -336,6 +359,43 @@ void cmdRecall(Session& session, Args const& args, std::ostream& out) {
   out << "Steps:     " << steps << '\n'
       << "Converged: yes\n"
       << "Energy:    " << finalEnergy << '\n';
+}
+
+void cmdCorrupt(Session&, Args const& args, std::ostream& out) {
+  auto const parsed{parseOptions(args, {
+                                           {"output", "o", true},
+                                           {"noise", "", true},
+                                       })};
+  if (parsed.positional.size() != std::size_t{1}) {
+    throw std::runtime_error(
+        "Error: wrong number of arguments. Try 'help corrupt'.\n");
+  }
+
+  auto const outIt{parsed.values.find("output")};
+  if (outIt == parsed.values.end()) {
+    throw std::runtime_error(
+        "Error: --output is required. Try 'help corrupt'.\n");
+  }
+
+  double noise{0.25};
+  if (auto const it{parsed.values.find("noise")}; it != parsed.values.end()) {
+    noise = parseNoise(it->second);
+  }
+
+  std::filesystem::path const inPath{expandHome(parsed.positional[0])};
+  if (!isImageFile(inPath)) {
+    throw std::runtime_error("Error: invalid image file '" + inPath.string() +
+                             "'.\n");
+  }
+
+  std::filesystem::path const outPath{expandHome(outIt->second)};
+  if (!corruptImage(inPath, noise).saveToFile(outPath)) {
+    throw std::runtime_error("Error: cannot save output image to '" +
+                             outPath.string() + "'.\n");
+  }
+
+  out << "Corrupted " << inPath.string() << " (noise " << noise << ").\n"
+      << "Saved to " << outPath.string() << '\n';
 }
 
 void cmdInfo(Session& session, Args const& args, std::ostream& out) {
@@ -356,42 +416,6 @@ void cmdInfo(Session& session, Args const& args, std::ostream& out) {
       << "Network size:  " << sizeNet.x << 'x' << sizeNet.y << '\n'
       << "Trained:       " << (trained ? "yes" : "no") << '\n'
       << "Compatible:    " << (compatibility ? "yes" : "no") << '\n';
-}
-
-void cmdForget(Session& session, Args const& args, std::ostream& out) {
-  if (args.size() != std::size_t{1}) {
-    throw std::runtime_error(
-        "Error: wrong numbers of arguments. Try 'help forget'.\n");
-  }
-
-  Network& net{session.net()};
-  if (!net.isTrained()) {
-    throw std::runtime_error("Error: the network is not trained.\n");
-  }
-
-  auto const imgPath{std::filesystem::path{expandHome(args[0])}};
-  sf::Image img{};
-  if (!img.loadFromFile(imgPath) || !isValidImage(img)) {
-    throw std::runtime_error("Error: cannot load valid image '" +
-                             imgPath.string() + "'.\n");
-  }
-
-  auto const netSize{net.size()};
-  auto const imgSize{img.getSize()};
-  if (imgSize.x < netSize.x || imgSize.y < netSize.y) {
-    throw std::runtime_error("Error: image is smaller than network size (" +
-                             std::to_string(netSize.x) + "x" +
-                             std::to_string(netSize.y) + ").\n");
-  }
-
-  if (imgSize != netSize) {
-    img = resizeImage(img, netSize);
-  }
-
-  auto const pattern{imageToBinary(img)};
-  net.learn(pattern, -1.0);
-
-  out << "Forgot pattern from " << imgPath.string() << ".\n";
 }
 
 }  // namespace hopfield

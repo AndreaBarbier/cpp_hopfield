@@ -197,7 +197,7 @@ class Network {
   /// @pre Network weight matrix must be initialized and match pattern dimensions
   /// @param[in] p Pattern to learn
   /// @param[in] sign Scale/sign applied to the Hebbian contribution (default +1.0)
-  void learn(PatternInt const& p, double sign = +1.0);
+  void learn(PatternInt const& p);
 
   /// @brief Trains the network using a collection of patterns
   /// @param[in] patterns Vector of patterns used to initialize and train the weight matrix

@@ -842,18 +842,6 @@ TEST_CASE("Network can learn a pattern incrementally") {
   CHECK(net.isTrained());
 }
 
-TEST_CASE("Network learn accepts a negative contribution") {
-  hopfield::Network net{sf::Vector2u{2u, 2u}};
-  auto p = makePattern(2, 2, 1);
-  CHECK_NOTHROW(net.learn(p, -1.0));
-}
-
-TEST_CASE("Network learn accepts a fractional contribution") {
-  hopfield::Network net{sf::Vector2u{2u, 2u}};
-  auto p = makePattern(2, 2, -1);
-  CHECK_NOTHROW(net.learn(p, 0.5));
-}
-
 TEST_CASE("Network recall returns a stored uniform positive pattern") {
   hopfield::Network net{sf::Vector2u{2u, 2u}};
   auto p = makePattern(2, 2, 1);
